@@ -1,0 +1,23 @@
+version: '3'
+
+services:
+  stats-server:
+    image: ${DOCKER_IMAGE:-ghcr.io/lamarquenet/stats-server:latest}
+    platforms:
+        - linux/amd64
+        - linux/arm64
+        - linux/arm/v7
+    container_name: stats-server
+    restart: unless-stopped
+    ports:
+      - "${WOL_SERVICE_PORT:-8002}:${WOL_SERVICE_PORT:-8002}"
+    environment:
+      - WOL_SERVICE_PORT=${WOL_SERVICE_PORT:-8002}
+      - SERVER_MAC=${SERVER_MAC}
+      - WOL_BROADCAST_ADDR=${WOL_BROADCAST_ADDR:-}
+    networks:
+      - stats-network
+
+networks:
+  stats-network:
+    driver: bridge
