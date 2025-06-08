@@ -1,22 +1,23 @@
-FROM node:23-alpine
+FROM nvidia/cuda:12.3.2-base-ubuntu22.04
+
+# Install Node.js (use setup script for latest Node 23)
+RUN apt-get update && apt-get install -y curl gnupg && \
+    curl -fsSL https://deb.nodesource.com/setup_23.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /usr/src/app
 
 # Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
 COPY package*.json ./
-
 RUN npm install
 
-# Bundle app source
+# Copy app source
 COPY . .
 
-# Expose the port the app runs on
 EXPOSE 8002
 
-# Set environment variable to indicate we're running in Docker
 ENV RUNNING_IN_DOCKER=true
 
-# Command to run the application
 CMD ["npm", "start"]
