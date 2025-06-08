@@ -15,5 +15,8 @@ COPY . .
 # Expose the port the app runs on
 EXPOSE 8002
 
+# Set environment variable to indicate we're running in Docker
+ENV RUNNING_IN_DOCKER=true
+
 # Command to run the application
 CMD ["npm", "start"]

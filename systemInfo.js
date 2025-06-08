@@ -63,16 +63,52 @@ async function getMemoryInfo() {
  * Get GPU information using nvidia-smi
  */
 async function getGpuInfo() {
+  // Check if we're in a Docker environment without NVIDIA support
+  if (process.env.RUNNING_IN_DOCKER === 'true' && process.env.NVIDIA_VISIBLE_DEVICES !== 'all') {
+    console.log('Running in Docker without NVIDIA GPU access, skipping GPU info collection');
+    return [{
+      name: 'No GPU Access',
+      temperature: 'N/A',
+      fanSpeed: 'N/A',
+      powerDraw: 'N/A',
+      powerLimit: 'N/A',
+      memoryTotal: 'N/A',
+      memoryUsed: 'N/A',
+      memoryFree: 'N/A',
+      utilization: 'N/A',
+      status: 'Docker container has no NVIDIA GPU access'
+    }];
+  }
+
   try {
+    console.log('Attempting to get GPU info using node-nvidia-smi package...');
     // Try using node-nvidia-smi first
     return new Promise((resolve, reject) => {
       nvidiaSmi((err, data) => {
         if (err) {
+          console.log('node-nvidia-smi failed with error:', err.message);
+          console.log('Falling back to command line nvidia-smi...');
           // Fall back to command line nvidia-smi
           fallbackNvidiaSmi()
             .then(resolve)
-            .catch(reject);
+            .catch(error => {
+              console.log('Fallback nvidia-smi failed with error:', error.message);
+              // Return a more informative response when no GPU is available
+              resolve([{
+                name: 'No GPU Detected',
+                temperature: 'N/A',
+                fanSpeed: 'N/A',
+                powerDraw: 'N/A',
+                powerLimit: 'N/A',
+                memoryTotal: 'N/A',
+                memoryUsed: 'N/A',
+                memoryFree: 'N/A',
+                utilization: 'N/A',
+                status: 'nvidia-smi not available - NVIDIA drivers may not be installed or accessible'
+              }]);
+            });
         } else {
+          console.log('Successfully retrieved GPU info using node-nvidia-smi');
           const gpus = data.nvidia_smi_log.gpu || [];
           const formattedGpus = Array.isArray(gpus) ? gpus : [gpus];
           
@@ -85,14 +121,29 @@ async function getGpuInfo() {
             memoryTotal: gpu.fb_memory_usage?.total?.split(' ')[0] || 'N/A',
             memoryUsed: gpu.fb_memory_usage?.used?.split(' ')[0] || 'N/A',
             memoryFree: gpu.fb_memory_usage?.free?.split(' ')[0] || 'N/A',
-            utilization: gpu.utilization?.gpu_util?.split(' ')[0] || 'N/A'
+            utilization: gpu.utilization?.gpu_util?.split(' ')[0] || 'N/A',
+            status: 'available'
           })));
         }
       });
     });
   } catch (error) {
     console.error('Error getting GPU info:', error);
-    return fallbackNvidiaSmi().catch(() => []);
+    return fallbackNvidiaSmi().catch(error => {
+      console.error('Both GPU info methods failed:', error.message);
+      return [{
+        name: 'Error',
+        temperature: 'N/A',
+        fanSpeed: 'N/A',
+        powerDraw: 'N/A',
+        powerLimit: 'N/A',
+        memoryTotal: 'N/A',
+        memoryUsed: 'N/A',
+        memoryFree: 'N/A',
+        utilization: 'N/A',
+        status: 'Error retrieving GPU information: ' + error.message
+      }];
+    });
   }
 }
 
@@ -101,7 +152,18 @@ async function getGpuInfo() {
  */
 async function fallbackNvidiaSmi() {
   try {
+    console.log('Executing nvidia-smi command...');
+    // Check if nvidia-smi exists before trying to execute it
+    try {
+      await execPromise('which nvidia-smi');
+      console.log('nvidia-smi command found');
+    } catch (error) {
+      console.log('nvidia-smi command not found in PATH');
+      throw new Error('nvidia-smi command not found in PATH');
+    }
+    
     const { stdout } = await execPromise('nvidia-smi --query-gpu=name,temperature.gpu,fan.speed,power.draw,power.limit,memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader,nounits');
+    console.log('nvidia-smi command executed successfully');
     
     const lines = stdout.trim().split('\n');
     return lines.map(line => {

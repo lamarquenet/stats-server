@@ -33,7 +33,7 @@ A Node.js server that provides system statistics and power management functional
 
 - Node.js 14+
 - npm or yarn
-- For GPU monitoring: NVIDIA GPU with nvidia-smi installed
+- For GPU monitoring: NVIDIA GPU with nvidia-smi installed (optional)
 
 ### Setup
 
@@ -59,6 +59,33 @@ A Node.js server that provides system statistics and power management functional
    ```
    docker-compose up -d
    ```
+
+### NVIDIA GPU Support in Docker
+
+By default, the Docker container doesn't have access to NVIDIA GPUs. If you have NVIDIA GPUs and want to monitor them:
+
+1. Install the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) on your host system.
+
+2. Modify the `docker-compose.yml` file to enable GPU access by uncommenting the NVIDIA-specific sections:
+   ```yaml
+   deploy:
+     resources:
+       reservations:
+         devices:
+           - driver: nvidia
+             count: all
+             capabilities: [gpu]
+   environment:
+     - NVIDIA_VISIBLE_DEVICES=all
+   ```
+
+3. Restart the container:
+   ```
+   docker-compose down
+   docker-compose up -d
+   ```
+
+If you don't have NVIDIA GPUs or don't need GPU monitoring, the server will still work without these modifications, displaying "No GPU Detected" in the GPU information.
 
 ## Environment Variables
 

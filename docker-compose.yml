@@ -13,8 +13,17 @@ services:
       - "${PORT:-8002}:${PORT:-8002}"
     environment:
       - PORT=${PORT:-8002}
+      - RUNNING_IN_DOCKER=true
+      - NVIDIA_VISIBLE_DEVICES=all
     networks:
       - stats-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
 networks:
   stats-network:

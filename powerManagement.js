@@ -29,23 +29,9 @@ async function shutdown() {
 /**
  * Check if the server is online
  */
-async function isOnline(ip) {
-  try {
-    // Use IP address from environment variable if not provided
-    const serverIp = ip || process.env.SERVER_IP;
-    
-    if (!serverIp) {
-      throw new Error('Server IP not provided');
-    }
-    
-    // Use ping to check if server is online
-    const { stdout, stderr } = await execPromise(`ping -c 1 -W 1 ${serverIp}`);
-    
-    return { online: true, message: 'Server is online' };
-  } catch (error) {
-    console.log(`Server at ${ip || process.env.SERVER_IP} appears to be offline`);
-    return { online: false, message: 'Server is offline' };
-  }
+async function isOnline() {
+  // always return true since if we get the call, we are online
+  return { online: true, message: 'Server is online' };
 }
 
 /**
