@@ -15,6 +15,7 @@ services:
       - PORT=${PORT:-8002}
       - RUNNING_IN_DOCKER=true
       - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     networks:
       - stats-network
     deploy:
