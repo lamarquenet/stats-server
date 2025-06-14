@@ -16,3 +16,5 @@ router.post('/start-vllm', async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
+module.exports = router;
