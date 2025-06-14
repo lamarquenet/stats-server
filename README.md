@@ -124,3 +124,16 @@ services:
       # known_hosts as before
       - /home/aiserver/.ssh/known_hosts:/root/.ssh/known_hosts:ro
 
+# 4- Give permissions to run shutdown commands without password
+//replace aiserver with the name of your user in the host machine
+sudo visudo -f /etc/sudoers.d/aiserver_nopass
+//add this line at the end
+aiserver ALL=(ALL) NOPASSWD: /sbin/shutdown
+// save and run command
+sudo chmod 0440 /etc/sudoers.d/aiserver_nopass
+
+# 5- Add docker to known host
+cd
+cd .ssh
+ssh-keyscan -t ed25519 172.17.0.1 >> ~/.ssh/known_hosts
+

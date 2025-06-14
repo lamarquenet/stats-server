@@ -31,9 +31,12 @@ async function shutdown() {
 
       // 4. Invoke a passwordless sudo systemctl call
       const { stdout, stderr, code } = await ssh.execCommand(
-        'sudo systemctl poweroff',    // use systemctl for a clean shutdown
+        'sudo /sbin/shutdown',    // use systemctl for a clean shutdown
         { cwd: '/home/aiserver' }      // optional: set working dir
       );
+
+      //if we want to use a password, we can do it like this:
+      //ssh.execCommand('echo "password" | sudo -S shutdown');
 
       // 5. Close the SSH connection
       ssh.dispose();
