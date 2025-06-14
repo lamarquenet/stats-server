@@ -4,7 +4,6 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const systemInfo = require('./systemInfo');
-const powerManagement = require('./powerManagement');
 
 // Load environment variables
 dotenv.config();
@@ -25,6 +24,7 @@ app.use(express.json());
 // Routes
 app.use('/api/system', require('./routes/systemRoutes'));
 app.use('/api/power', require('./routes/powerRoutes'));
+app.use('/api/command', require('./routes/commandsRoutes'));
 
 // Serve static files from the React app in production
 if (process.env.NODE_ENV === 'production') {

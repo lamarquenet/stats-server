@@ -3,7 +3,7 @@ const router = express.Router();
 const commandsExecution = require('../commandsExecution');
 
 /**
- * @route   POST /api/power/start-vllm
+ * @route   POST /api/command/start-vllm
  * @desc    Start the VLLM server
  * @access  Public
  */
