@@ -22,7 +22,7 @@ async function shutdown() {
 
       // 3. SSH to host
       await ssh.connect({
-        host: 'localhost',             // or host.docker.internal
+        host: '172.17.0.1',             // or host.docker.internal
         username: 'aiserver',
         privateKey,
         // We’ve mounted a valid known_hosts file at /root/.ssh/known_hosts,

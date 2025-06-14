@@ -6,6 +6,9 @@ RUN apt-get update && apt-get install -y curl gnupg && \
     apt-get install -y nodejs && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Instalar openssh-client
+RUN apt-get update && apt-get install -y openssh-client && rm -rf /var/lib/apt/lists/*
+
 # Create app directory
 WORKDIR /usr/src/app
 
