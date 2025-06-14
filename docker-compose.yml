@@ -11,6 +11,9 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-8002}:${PORT:-8002}"
+    volumes:
+      - stats_server:/data/
+      - /home/aiserver/.ssh/host-trigger:/root/.ssh/id_ed25519:ro
     environment:
       - PORT=${PORT:-8002}
       - RUNNING_IN_DOCKER=true

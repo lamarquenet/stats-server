@@ -98,6 +98,20 @@ If you don't have NVIDIA GPUs or don't need GPU monitoring, the server will stil
 | WOL_SERVICE_PORT | Port for Wake-on-LAN service | 8002 |
 | WOL_BROADCAST_ADDR | Broadcast address for Wake-on-LAN | - |
 
-## License
+## Setting up credentials to allow app running commands on host server when running on a docker via ssh, simpler if you just run this server on the host pc without docker
 
-MIT
+If you don't have openssh server do:
+sudo apt update
+sudo apt install openssh-server
+sudo systemctl enable --now ssh
+
+Then:
+ssh-keygen -t ed25519 -f ~/.ssh/host-trigger -N ""
+
+After add the key on authorized keys:
+cat ~/.ssh/host-trigger.pub >> ~/.ssh/authorized_keys
+
+Mount the SSH private key into the container:
+volumes:
+  - /home/youruser/.ssh/host-trigger:/root/.ssh/id_ed25519:ro
+
