@@ -12,7 +12,7 @@ router.post('/start-vllm', async (req, res) => {
     await commandsExecution.startVLLMServer();
     res.json({ success: true, message: 'VLLM server started successfully' });
   } catch (error) {
-    console.error('Error in /api/power/start-vllm:', error);
+    console.error('Error in /api/command/start-vllm:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
