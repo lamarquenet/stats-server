@@ -13,7 +13,10 @@ services:
       - "${PORT:-8002}:${PORT:-8002}"
     volumes:
       - stats_server:/data/
-      - /home/aiserver/.ssh/host-trigger:/root/.ssh/id_ed25519:ro
+      # mount the new RSA private key read‑only
+      - /home/aiserver/.ssh/host-trigger-rsa:/root/.ssh/id_rsa:ro
+      # known_hosts as before
+      - /home/aiserver/.ssh/known_hosts:/root/.ssh/known_hosts:ro
     environment:
       - PORT=${PORT:-8002}
       - RUNNING_IN_DOCKER=true

@@ -105,13 +105,22 @@ sudo apt update
 sudo apt install openssh-server
 sudo systemctl enable --now ssh
 
-Then:
-ssh-keygen -t ed25519 -f ~/.ssh/host-trigger -N ""
+# 1- Generate a 4096‑bit RSA key in PEM format, no passphrase
+ssh-keygen -t rsa -b 4096 -m PEM -f ~/.ssh/host-trigger-rsa -N ""
 
-After add the key on authorized keys:
-cat ~/.ssh/host-trigger.pub >> ~/.ssh/authorized_keys
 
-Mount the SSH private key into the container:
-volumes:
-  - /home/youruser/.ssh/host-trigger:/root/.ssh/id_ed25519:ro
+# 2- After add the key on authorized keys:
+cat ~/.ssh/host-trigger-rsa.pub >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+chmod 400 ~/.ssh/host-trigger-rsa
+
+# 3- Mount the SSH private key into the container:
+services:
+  stats-server:
+    # … your existing config …
+    volumes:
+      # mount the new RSA private key read‑only
+      - /home/aiserver/.ssh/host-trigger-rsa:/root/.ssh/id_rsa:ro
+      # known_hosts as before
+      - /home/aiserver/.ssh/known_hosts:/root/.ssh/known_hosts:ro
 

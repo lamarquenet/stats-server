@@ -81,7 +81,6 @@ async function getGpuInfo() {
   }
 
   try {
-    console.log('Attempting to get GPU info using node-nvidia-smi package...');
     // Try using node-nvidia-smi first
     return new Promise((resolve, reject) => {
       nvidiaSmi((err, data) => {
@@ -108,7 +107,6 @@ async function getGpuInfo() {
               }]);
             });
         } else {
-          console.log('Successfully retrieved GPU info using node-nvidia-smi');
           const gpus = data.nvidia_smi_log.gpu || [];
           const formattedGpus = Array.isArray(gpus) ? gpus : [gpus];
           

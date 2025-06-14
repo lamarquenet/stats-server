@@ -22,7 +22,7 @@ async function shutdown() {
       await ssh.connect({
         host: 'localhost',             // or host.docker.internal
         username: 'aiserver',
-        privateKey: '/root/.ssh/id_ed25519',
+        privateKey: '/root/.ssh/id_rsa',
         // We’ve mounted a valid known_hosts file at /root/.ssh/known_hosts,
         // so no need to disable verification here.
       });
