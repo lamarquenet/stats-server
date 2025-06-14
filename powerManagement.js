@@ -1,8 +1,10 @@
 const { exec } = require('child_process');
 const { NodeSSH } = require('node-ssh');
 const util = require('util');
+const fs = require('fs');
 
 const ssh = new NodeSSH();
+const privateKey = fs.readFileSync('/root/.ssh/id_rsa', 'utf8');
 const execPromise = util.promisify(exec);
 async function shutdown() {
   try {
@@ -22,7 +24,7 @@ async function shutdown() {
       await ssh.connect({
         host: 'localhost',             // or host.docker.internal
         username: 'aiserver',
-        privateKey: '/root/.ssh/id_rsa',
+        privateKey,
         // We’ve mounted a valid known_hosts file at /root/.ssh/known_hosts,
         // so no need to disable verification here.
       });
