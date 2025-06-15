@@ -9,7 +9,7 @@ const commandsExecution = require('../commandsExecution');
  */
 router.post('/start-vllm', async (req, res) => {
   try {
-    await commandsExecution.startVLLMServer();
+    commandsExecution.startVLLMServer();
     res.json({ success: true, message: 'VLLM server started successfully' });
   } catch (error) {
     console.error('Error in /api/command/start-vllm:', error);
@@ -24,7 +24,7 @@ router.post('/start-vllm', async (req, res) => {
  */
 router.post('/stop-vllm', async (req, res) => {
   try {
-    await commandsExecution.stopVLLMServer();
+    commandsExecution.stopVLLMServer();
     res.json({ success: true, message: 'VLLM server stoped successfully' });
   } catch (error) {
     console.error('Error in /api/command/stop-vllm:', error);
