@@ -20,7 +20,9 @@ async function startVLLMServer() {
     if (result.stderr) {
       console.error('Error running vLLM:', result.stderr);
     } else {
-      console.log('vLLM started successfully:', result.stdout);
+      // This ssh connection stays open until vllm is stopped to prevent the server from auto turning off
+      // We simulate here a user been connected to the server to prevent the auto shutdown script from turning it off
+      console.log('ssh connection disposed');
     }
 
   } catch (err) {
