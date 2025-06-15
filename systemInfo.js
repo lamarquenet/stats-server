@@ -109,14 +109,13 @@ async function getGpuInfo() {
         } else {
           const gpus = data.nvidia_smi_log.gpu || [];
           const formattedGpus = Array.isArray(gpus) ? gpus : [gpus];
-          console.log('GPU info retrieved successfully using node-nvidia-smi', formattedGpus);
           
           resolve(formattedGpus.map(gpu => ({
             name: gpu.product_name || 'Unknown GPU',
             temperature: gpu.temperature?.gpu_temp?.split(' ')[0] || 'N/A',
             fanSpeed: gpu.fan_speed?.split(' ')[0] || 'N/A',
-            powerDraw: gpu.power_readings?.power_draw?.split(' ')[0] || 'N/A',
-            powerLimit: gpu.power_readings?.power_limit?.split(' ')[0] || 'N/A',
+            powerDraw: gpu.gpu_power_readings?.power_draw?.split(' ')[0] || 'N/A',
+            powerLimit: gpu.gpu_power_readings?.current_power_limit?.split(' ')[0] || 'N/A',
             memoryTotal: gpu.fb_memory_usage?.total?.split(' ')[0] || 'N/A',
             memoryUsed: gpu.fb_memory_usage?.used?.split(' ')[0] || 'N/A',
             memoryFree: gpu.fb_memory_usage?.free?.split(' ')[0] || 'N/A',
