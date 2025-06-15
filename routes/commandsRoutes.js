@@ -40,7 +40,6 @@ router.post('/stop-vllm', async (req, res) => {
 router.get('/vllm-status', async (req, res) => {
   try {
     const response = await commandsExecution.statusVLLMServer();
-    console.log('VLLM status response:', response);
     
     if (response.status == 200) {
       res.json({ status: 'running' });

@@ -1,6 +1,6 @@
 {
   "name": "stats-server",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Server for system statistics and power management",
   "main": "index.js",
   "scripts": {
