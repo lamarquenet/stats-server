@@ -1,5 +1,6 @@
 const { NodeSSH } = require('node-ssh');
 const fs = require('fs');
+const axios = require('axios');
 
 const ssh = new NodeSSH();
 const privateKey = fs.readFileSync('/root/.ssh/id_rsa', 'utf8');
