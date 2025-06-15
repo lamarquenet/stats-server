@@ -109,6 +109,7 @@ async function getGpuInfo() {
         } else {
           const gpus = data.nvidia_smi_log.gpu || [];
           const formattedGpus = Array.isArray(gpus) ? gpus : [gpus];
+          console.log('GPU info retrieved successfully using node-nvidia-smi', formattedGpus);
           
           resolve(formattedGpus.map(gpu => ({
             name: gpu.product_name || 'Unknown GPU',
@@ -151,37 +152,57 @@ async function getGpuInfo() {
 async function fallbackNvidiaSmi() {
   try {
     console.log('Executing nvidia-smi command...');
-    // Check if nvidia-smi exists before trying to execute it
-    try {
-      await execPromise('which nvidia-smi');
-      console.log('nvidia-smi command found');
-    } catch (error) {
-      console.log('nvidia-smi command not found in PATH');
-      throw new Error('nvidia-smi command not found in PATH');
-    }
-    
-    const { stdout } = await execPromise('nvidia-smi --query-gpu=name,temperature.gpu,fan.speed,power.draw,power.limit,memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader,nounits');
+
+    // Check if nvidia-smi exists
+    await execPromise('which nvidia-smi');
+
+    // Force output in English to ensure parsing is reliable
+    const { stdout } = await execPromise(
+      'LC_ALL=C nvidia-smi --query-gpu=name,temperature.gpu,fan.speed,power.draw,power.limit,memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader,nounits'
+    );
+
     console.log('nvidia-smi command executed successfully');
     
     const lines = stdout.trim().split('\n');
     return lines.map(line => {
-      const [name, temperature, fanSpeed, powerDraw, powerLimit, memoryTotal, memoryUsed, memoryFree, utilization] = line.split(', ').map(item => item.trim());
-      
+      const [
+        name,
+        temperature,
+        fanSpeed,
+        powerDraw,
+        powerLimit,
+        memoryTotal,
+        memoryUsed,
+        memoryFree,
+        utilization
+      ] = line.split(',').map(item => item.trim());
+
       return {
         name: name || 'Unknown GPU',
-        temperature: temperature || 'N/A',
-        fanSpeed: fanSpeed || 'N/A',
-        powerDraw: powerDraw || 'N/A',
-        powerLimit: powerLimit || 'N/A',
-        memoryTotal: memoryTotal || 'N/A',
-        memoryUsed: memoryUsed || 'N/A',
-        memoryFree: memoryFree || 'N/A',
-        utilization: utilization || 'N/A'
+        temperature: temperature ? `${temperature} °C` : 'N/A',
+        fanSpeed: fanSpeed ? `${fanSpeed} %` : 'N/A',
+        powerDraw: powerDraw ? `${powerDraw} W` : 'N/A',
+        powerLimit: powerLimit ? `${powerLimit} W` : 'N/A',
+        memoryTotal: memoryTotal ? `${memoryTotal} MiB` : 'N/A',
+        memoryUsed: memoryUsed ? `${memoryUsed} MiB` : 'N/A',
+        memoryFree: memoryFree ? `${memoryFree} MiB` : 'N/A',
+        utilization: utilization ? `${utilization} %` : 'N/A'
       };
     });
   } catch (error) {
     console.error('Error in fallback nvidia-smi:', error);
-    return [];
+    return [{
+      name: 'Error',
+      temperature: 'N/A',
+      fanSpeed: 'N/A',
+      powerDraw: 'N/A',
+      powerLimit: 'N/A',
+      memoryTotal: 'N/A',
+      memoryUsed: 'N/A',
+      memoryFree: 'N/A',
+      utilization: 'N/A',
+      status: 'Error retrieving GPU info: ' + error.message
+    }];
   }
 }
 
