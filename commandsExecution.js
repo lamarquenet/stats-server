@@ -57,7 +57,18 @@ async function stopVLLMServer() {
   }
 }
 
+const VLLM_URL = 'http://172.17.0.1:8001';
+async function statusVLLMServer() {
+  try {
+    const response = await axios.get(`${VLLM_URL}/health`, { timeout: 2000 });
+    return response;
+  } catch (err) {
+    return err;
+  }
+}
+
 module.exports = {
   startVLLMServer,
   stopVLLMServer,
+  statusVLLMServer,
 };
