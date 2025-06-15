@@ -32,4 +32,26 @@ router.post('/stop-vllm', async (req, res) => {
   }
 });
 
+/**
+ * @route   GET /api/command/vllm-status
+ * @desc    Stop the VLLM server
+ * @access  Public
+ */
+const VLLM_URL = 'http://172.17.0.1:8001';
+router.get('/vllm-status', async (req, res) => {
+  try {
+    const response = await axios.get(`${VLLM_URL}/health`, { timeout: 2000 });
+    
+    if (response.status === 200) {
+      res.json({ status: 'running' });
+    } else {
+      res.json({ status: 'not-ready' });
+    }
+  } catch (err) {
+    res.json({ status: 'not-running', error: err.message });
+  }
+});
+
+
+
 module.exports = router;
