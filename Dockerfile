@@ -6,8 +6,15 @@ RUN apt-get update && apt-get install -y curl gnupg && \
     apt-get install -y nodejs && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Instalar openssh-client
+# Install openssh-client
 RUN apt-get update && apt-get install -y openssh-client && rm -rf /var/lib/apt/lists/*
+
+# Install NVIDIA drivers and utilities
+#RUN apt-get update && apt-get install -y --no-install-recommends \
+#    nvidia-utils-535 \
+#    nvidia-driver-535 \
+#    nvidia-cuda-toolkit-12-6 \
+#    && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /usr/src/app

@@ -13,7 +13,7 @@ services:
       - "${PORT:-8002}:${PORT:-8002}"
     volumes:
       - stats_server:/data/
-      # mount the new RSA private key read‑only
+      # mount the new RSA private key read-only
       - /home/aiserver/.ssh/host-trigger-rsa:/root/.ssh/id_rsa:ro
       # known_hosts as before
       - /home/aiserver/.ssh/known_hosts:/root/.ssh/known_hosts:ro
@@ -31,6 +31,7 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    runtime: nvidia
 
 networks:
   stats-network:

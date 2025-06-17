@@ -66,7 +66,7 @@ By default, the Docker container doesn't have access to NVIDIA GPUs. If you have
 
 1. Install the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) on your host system.
 
-2. Modify the `docker-compose.yml` file to enable GPU access by uncommenting the NVIDIA-specific sections:
+2. Modify the `docker-compose.yml` file to enable GPU access:
    ```yaml
    deploy:
      resources:
@@ -77,6 +77,7 @@ By default, the Docker container doesn't have access to NVIDIA GPUs. If you have
              capabilities: [gpu]
    environment:
      - NVIDIA_VISIBLE_DEVICES=all
+   runtime: nvidia
    ```
 
 3. Restart the container:
@@ -86,6 +87,18 @@ By default, the Docker container doesn't have access to NVIDIA GPUs. If you have
    ```
 
 If you don't have NVIDIA GPUs or don't need GPU monitoring, the server will still work without these modifications, displaying "No GPU Detected" in the GPU information.
+
+## GPU Troubleshooting
+
+If you encounter issues with GPU monitoring, such as "Failed to initialize NVML" errors, try the following:
+
+1. **Ensure NVIDIA drivers are properly installed** on the host system.
+2. **Verify GPU access in Docker**:
+   - Make sure the NVIDIA Container Toolkit is installed.
+   - Check that the container has the necessary GPU capabilities.
+3. **Check GPU availability**:
+   - The GPU might be temporarily unavailable if it's being used by another process (e.g., loading a large model).
+   - The server has a fallback mechanism that will continue to function even if GPU information cannot be retrieved.
 
 ## Environment Variables
 
@@ -107,7 +120,6 @@ sudo systemctl enable --now ssh
 
 # 1- Generate a 4096‑bit RSA key in PEM format, no passphrase
 ssh-keygen -t rsa -b 4096 -m PEM -f ~/.ssh/host-trigger-rsa -N ""
-
 
 # 2- After add the key on authorized keys:
 cat ~/.ssh/host-trigger-rsa.pub >> ~/.ssh/authorized_keys
@@ -136,4 +148,3 @@ sudo chmod 0440 /etc/sudoers.d/aiserver_nopass
 cd
 cd .ssh
 ssh-keyscan -t ed25519 172.17.0.1 >> ~/.ssh/known_hosts
-

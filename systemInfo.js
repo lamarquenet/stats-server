@@ -2,6 +2,9 @@ const si = require('systeminformation');
 const nvidiaSmi = require('node-nvidia-smi');
 const { exec } = require('child_process');
 const util = require('util');
+const { NodeSSH } = require('node-ssh');
+const ssh = new NodeSSH();
+const privateKey = require('fs').readFileSync('/root/.ssh/id_rsa', 'utf8');
 
 const execPromise = util.promisify(exec);
 
@@ -15,7 +18,7 @@ async function getCpuInfo() {
       si.cpuTemperature(),
       si.cpuCurrentSpeed()
     ]);
-    
+
     return {
       usage: load.currentLoad.toFixed(2),
       temperature: temp.main || temp.cores[0] || 'N/A',
@@ -41,7 +44,7 @@ async function getCpuInfo() {
 async function getMemoryInfo() {
   try {
     const mem = await si.mem();
-    
+
     return {
       total: formatBytes(mem.total),
       used: formatBytes(mem.used),
@@ -109,7 +112,7 @@ async function getGpuInfo() {
         } else {
           const gpus = data.nvidia_smi_log.gpu || [];
           const formattedGpus = Array.isArray(gpus) ? gpus : [gpus];
-          
+
           resolve(formattedGpus.map(gpu => ({
             name: gpu.product_name || 'Unknown GPU',
             temperature: gpu.temperature?.gpu_temp?.split(' ')[0] || 'N/A',
@@ -150,9 +153,9 @@ async function getGpuInfo() {
  */
 async function fallbackNvidiaSmi() {
   try {
-    console.log('Executing nvidia-smi command...');
+    console.log('Executing nvidia-smi command locally...');
 
-    // Check if nvidia-smi exists
+    // Check if nvidia-smi exists locally
     await execPromise('which nvidia-smi');
 
     // Force output in English to ensure parsing is reliable
@@ -160,8 +163,8 @@ async function fallbackNvidiaSmi() {
       'LC_ALL=C nvidia-smi --query-gpu=name,temperature.gpu,fan.speed,power.draw,power.limit,memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader,nounits'
     );
 
-    console.log('nvidia-smi command executed successfully');
-    
+    console.log('Local nvidia-smi command executed successfully');
+
     const lines = stdout.trim().split('\n');
     return lines.map(line => {
       const [
@@ -185,23 +188,71 @@ async function fallbackNvidiaSmi() {
         memoryTotal: memoryTotal ? `${memoryTotal} MiB` : 'N/A',
         memoryUsed: memoryUsed ? `${memoryUsed} MiB` : 'N/A',
         memoryFree: memoryFree ? `${memoryFree} MiB` : 'N/A',
-        utilization: utilization ? `${utilization} %` : 'N/A'
+        utilization: utilization ? `${utilization} %` : 'N/A',
+        status: 'available'
       };
     });
-  } catch (error) {
-    console.error('Error in fallback nvidia-smi:', error);
-    return [{
-      name: 'Error',
-      temperature: 'N/A',
-      fanSpeed: 'N/A',
-      powerDraw: 'N/A',
-      powerLimit: 'N/A',
-      memoryTotal: 'N/A',
-      memoryUsed: 'N/A',
-      memoryFree: 'N/A',
-      utilization: 'N/A',
-      status: 'Error retrieving GPU info: ' + error.message
-    }];
+  } catch (localError) {
+    console.error('Local nvidia-smi failed, attempting SSH fallback:', localError.message);
+
+    try {
+      console.log('Connecting to host via SSH...');
+      await ssh.connect({
+        host: '172.17.0.1', // Replace with your IP or hostname
+        username: 'aiserver',
+        privateKey
+      });
+
+      const { stdout } = await ssh.execCommand(
+        'LC_ALL=C nvidia-smi --query-gpu=name,temperature.gpu,fan.speed,power.draw,power.limit,memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader,nounits'
+      );
+
+      console.log('Remote nvidia-smi command executed successfully via SSH');
+
+      const lines = stdout.trim().split('\n');
+      ssh.dispose(); // Close the SSH connection
+
+      return lines.map(line => {
+        const [
+          name,
+          temperature,
+          fanSpeed,
+          powerDraw,
+          powerLimit,
+          memoryTotal,
+          memoryUsed,
+          memoryFree,
+          utilization
+        ] = line.split(',').map(item => item.trim());
+
+        return {
+          name: name || 'Unknown GPU',
+          temperature: temperature ? `${temperature} °C` : 'N/A',
+          fanSpeed: fanSpeed ? `${fanSpeed} %` : 'N/A',
+          powerDraw: powerDraw ? `${powerDraw} W` : 'N/A',
+          powerLimit: powerLimit ? `${powerLimit} W` : 'N/A',
+          memoryTotal: memoryTotal ? `${memoryTotal} MiB` : 'N/A',
+          memoryUsed: memoryUsed ? `${memoryUsed} MiB` : 'N/A',
+          memoryFree: memoryFree ? `${memoryFree} MiB` : 'N/A',
+          utilization: utilization ? `${utilization} %` : 'N/A',
+          status: 'available'
+        };
+      });
+    } catch (sshError) {
+      console.error('SSH fallback failed:', sshError.message);
+      return [{
+        name: 'Error',
+        temperature: 'N/A',
+        fanSpeed: 'N/A',
+        powerDraw: 'N/A',
+        powerLimit: 'N/A',
+        memoryTotal: 'N/A',
+        memoryUsed: 'N/A',
+        memoryFree: 'N/A',
+        utilization: 'N/A',
+        status: 'Error retrieving GPU info via SSH: ' + sshError.message
+      }];
+    }
   }
 }
 
@@ -215,7 +266,7 @@ async function getAll() {
       getMemoryInfo(),
       getGpuInfo()
     ]);
-    
+
     return {
       timestamp: new Date().toISOString(),
       cpu,
@@ -238,13 +289,13 @@ async function getAll() {
  */
 function formatBytes(bytes, decimals = 2) {
   if (bytes === 0) return '0 Bytes';
-  
+
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-  
+
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
+
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
