@@ -80,16 +80,25 @@ async function getCpuInfo() {
 
 /**
  * Get memory (RAM) information
+ * Note: On Linux, we use 'available' memory to calculate real usage
+ * because 'used' includes buffers/cache that can be freed when needed
  */
 async function getMemoryInfo() {
   try {
     const mem = await si.mem();
 
+    // Calculate actual used memory (total - available)
+    // 'available' is memory that can be used by applications
+    const actualUsed = mem.total - mem.available;
+    const usagePercentage = ((actualUsed / mem.total) * 100).toFixed(2);
+
     return {
       total: formatBytes(mem.total),
-      used: formatBytes(mem.used),
+      used: formatBytes(actualUsed),
       free: formatBytes(mem.free),
-      usagePercentage: ((mem.used / mem.total) * 100).toFixed(2)
+      available: formatBytes(mem.available),
+      cached: formatBytes(mem.cached || 0),
+      usagePercentage
     };
   } catch (error) {
     console.error('Error getting memory info:', error);
@@ -97,6 +106,8 @@ async function getMemoryInfo() {
       total: 'N/A',
       used: 'N/A',
       free: 'N/A',
+      available: 'N/A',
+      cached: 'N/A',
       usagePercentage: 'N/A'
     };
   }
@@ -107,7 +118,10 @@ async function getMemoryInfo() {
  */
 async function getGpuInfo() {
   // Check if we're in a Docker environment without NVIDIA support
-  if (process.env.RUNNING_IN_DOCKER === 'true' && process.env.NVIDIA_VISIBLE_DEVICES !== 'all') {
+  // Accept any NVIDIA_VISIBLE_DEVICES value (all, 0, 0,1,2,3, etc.)
+  const hasGpuAccess = process.env.NVIDIA_VISIBLE_DEVICES && process.env.NVIDIA_VISIBLE_DEVICES !== '';
+
+  if (!hasGpuAccess) {
     console.log('Running in Docker without NVIDIA GPU access, skipping GPU info collection');
     return [{
       name: 'No GPU Access',
