@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -25,6 +26,10 @@ app.use(express.json());
 app.use('/api/system', require('./routes/systemRoutes'));
 app.use('/api/power', require('./routes/powerRoutes'));
 app.use('/api/command', require('./routes/commandsRoutes'));
+app.use('/api/ollama', require('./routes/ollamaRoutes'));
+app.use('/api/logs', require('./routes/logsRoutes'));
+app.use('/api/performance', require('./routes/performanceRoutes'));
+app.use('/api/llamacpp', require('./routes/llamaCppRoutes'));
 
 // Serve static files from the React app in production
 if (process.env.NODE_ENV === 'production') {

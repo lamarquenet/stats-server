@@ -1,11 +1,70 @@
 const { NodeSSH } = require('node-ssh');
 const fs = require('fs');
 const axios = require('axios');
+const { getModelConfig, getDefaultModelKey } = require('./config/models');
 
 const ssh = new NodeSSH();
 const privateKey = fs.readFileSync('/root/.ssh/id_rsa', 'utf8');
 
-async function startVLLMServer() {
+/**
+ * Build vLLM command string based on model configuration
+ * @param {Object} modelConfig - Model configuration object
+ * @returns {string} Command string to execute
+ */
+function buildVllmCommand(modelConfig) {
+  const parts = [
+    'vllm serve',
+    modelConfig.id,
+    `--host 0.0.0.0`,
+    `--gpu-memory-utilization ${modelConfig.gpuMemoryUtilization}`,
+    `--max-model-len ${modelConfig.maxModelLen}`,
+    `--port ${modelConfig.port}`,
+  ];
+
+  // Add optional parameters
+  if (modelConfig.tokenizerMode) {
+    parts.push(`--tokenizer_mode ${modelConfig.tokenizerMode}`);
+  }
+  if (modelConfig.configFormat) {
+    parts.push(`--config_format ${modelConfig.configFormat}`);
+  }
+  if (modelConfig.loadFormat) {
+    parts.push(`--load_format ${modelConfig.loadFormat}`);
+  }
+  if (modelConfig.toolCallParser) {
+    parts.push(`--tool-call-parser ${modelConfig.toolCallParser}`);
+  }
+  if (modelConfig.enableAutoToolChoice) {
+    parts.push(`--enable-auto-tool-choice`);
+  }
+  if (modelConfig.tensorParallelSize) {
+    parts.push(`--tensor-parallel-size ${modelConfig.tensorParallelSize}`);
+  }
+  
+  // Quantization options
+  if (modelConfig.quantization) {
+    parts.push(`--quantization ${modelConfig.quantization}`);
+  }
+  if (modelConfig.kvCacheDtype) {
+    parts.push(`--kv-cache-dtype ${modelConfig.kvCacheDtype}`);
+  }
+
+  return parts.join(' ');
+}
+
+/**
+ * Start the vLLM server with specified model
+ * @param {string} modelKey - Optional model key to use (defaults to devstral-standard)
+ */
+async function startVLLMServer(modelKey = null) {
+  // Get model configuration
+  const selectedModelKey = modelKey || getDefaultModelKey();
+  const modelConfig = getModelConfig(selectedModelKey);
+  
+  if (!modelConfig) {
+    throw new Error(`Unknown model: ${selectedModelKey}`);
+  }
+
   try {
     await ssh.connect({
       host: '172.17.0.1',
@@ -13,21 +72,22 @@ async function startVLLMServer() {
       privateKey,
     });
 
-    const command = `bash -lc "source ~/miniconda3/etc/profile.d/conda.sh && conda activate vllm-conda-env && nohup vllm serve mistralai/Devstral-Small-2505 --host 0.0.0.0 --gpu-memory-utilization 0.90 --max-model-len 85536 --port 8001 --tokenizer_mode mistral --config_format mistral --load_format mistral --tool-call-parser mistral --enable-auto-tool-choice --tensor-parallel-size 4 > vllm.log 2>&1 &"`;
+    const vllmCommand = buildVllmCommand(modelConfig);
+    const command = `bash -lc "source ~/miniconda3/etc/profile.d/conda.sh && conda activate vllm-conda-env && nohup ${vllmCommand} > vllm.log 2>&1 &"`;
 
-    console.log('Starting vLLM server remotely...');
+    console.log(`Starting vLLM server with model: ${selectedModelKey}`);
+    console.log(`Command: ${command}`);
     const result = await ssh.execCommand(command);
 
     if (result.stderr) {
       console.error('Error running vLLM:', result.stderr);
     } else {
-      // This ssh connection stays open until vllm is stopped to prevent the server from auto turning off
-      // We simulate here a user been connected to the server to prevent the auto shutdown script from turning it off
-      console.log('ssh connection disposed');
+      console.log('vLLM server started successfully');
     }
 
   } catch (err) {
     console.error('SSH connection or command failed:', err);
+    throw err;
   } finally {
     ssh.dispose();
   }
@@ -55,6 +115,7 @@ async function stopVLLMServer() {
 
   } catch (err) {
     console.error('SSH connection or command failed:', err);
+    throw err;
   } finally {
     ssh.dispose();
   }

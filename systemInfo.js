@@ -2,11 +2,51 @@ const si = require('systeminformation');
 const nvidiaSmi = require('node-nvidia-smi');
 const { exec } = require('child_process');
 const util = require('util');
+const fs = require('fs');
 const { NodeSSH } = require('node-ssh');
-const ssh = new NodeSSH();
-const privateKey = require('fs').readFileSync('/root/.ssh/id_rsa', 'utf8');
 
 const execPromise = util.promisify(exec);
+
+/**
+ * Load SSH private key with error handling
+ */
+let privateKey;
+try {
+  privateKey = fs.readFileSync('/root/.ssh/id_rsa', 'utf8');
+} catch (error) {
+  console.warn('Warning: SSH private key not found at /root/.ssh/id_rsa. SSH fallback will not be available.');
+  privateKey = null;
+}
+
+/**
+ * Parse GPU line from nvidia-smi output
+ */
+function parseGpuLine(line) {
+  const [
+    name,
+    temperature,
+    fanSpeed,
+    powerDraw,
+    powerLimit,
+    memoryTotal,
+    memoryUsed,
+    memoryFree,
+    utilization
+  ] = line.split(',').map(item => item.trim());
+
+  return {
+    name: name || 'Unknown GPU',
+    temperature: temperature ? `${temperature} °C` : 'N/A',
+    fanSpeed: fanSpeed ? `${fanSpeed} %` : 'N/A',
+    powerDraw: powerDraw ? `${powerDraw} W` : 'N/A',
+    powerLimit: powerLimit ? `${powerLimit} W` : 'N/A',
+    memoryTotal: memoryTotal ? `${memoryTotal} MiB` : 'N/A',
+    memoryUsed: memoryUsed ? `${memoryUsed} MiB` : 'N/A',
+    memoryFree: memoryFree ? `${memoryFree} MiB` : 'N/A',
+    utilization: utilization ? `${utilization} %` : 'N/A',
+    status: 'available'
+  };
+}
 
 /**
  * Get CPU information
@@ -166,35 +206,28 @@ async function fallbackNvidiaSmi() {
     console.log('Local nvidia-smi command executed successfully');
 
     const lines = stdout.trim().split('\n');
-    return lines.map(line => {
-      const [
-        name,
-        temperature,
-        fanSpeed,
-        powerDraw,
-        powerLimit,
-        memoryTotal,
-        memoryUsed,
-        memoryFree,
-        utilization
-      ] = line.split(',').map(item => item.trim());
-
-      return {
-        name: name || 'Unknown GPU',
-        temperature: temperature ? `${temperature} °C` : 'N/A',
-        fanSpeed: fanSpeed ? `${fanSpeed} %` : 'N/A',
-        powerDraw: powerDraw ? `${powerDraw} W` : 'N/A',
-        powerLimit: powerLimit ? `${powerLimit} W` : 'N/A',
-        memoryTotal: memoryTotal ? `${memoryTotal} MiB` : 'N/A',
-        memoryUsed: memoryUsed ? `${memoryUsed} MiB` : 'N/A',
-        memoryFree: memoryFree ? `${memoryFree} MiB` : 'N/A',
-        utilization: utilization ? `${utilization} %` : 'N/A',
-        status: 'available'
-      };
-    });
+    return lines.map(line => parseGpuLine(line));
   } catch (localError) {
     console.error('Local nvidia-smi failed, attempting SSH fallback:', localError.message);
 
+    // Check if SSH is available
+    if (!privateKey) {
+      console.error('SSH fallback not available: private key not loaded');
+      return [{
+        name: 'Error',
+        temperature: 'N/A',
+        fanSpeed: 'N/A',
+        powerDraw: 'N/A',
+        powerLimit: 'N/A',
+        memoryTotal: 'N/A',
+        memoryUsed: 'N/A',
+        memoryFree: 'N/A',
+        utilization: 'N/A',
+        status: 'Error: SSH private key not available'
+      }];
+    }
+
+    const ssh = new NodeSSH(); // Create new SSH instance per connection
     try {
       console.log('Connecting to host via SSH...');
       await ssh.connect({
@@ -210,34 +243,7 @@ async function fallbackNvidiaSmi() {
       console.log('Remote nvidia-smi command executed successfully via SSH');
 
       const lines = stdout.trim().split('\n');
-      ssh.dispose(); // Close the SSH connection
-
-      return lines.map(line => {
-        const [
-          name,
-          temperature,
-          fanSpeed,
-          powerDraw,
-          powerLimit,
-          memoryTotal,
-          memoryUsed,
-          memoryFree,
-          utilization
-        ] = line.split(',').map(item => item.trim());
-
-        return {
-          name: name || 'Unknown GPU',
-          temperature: temperature ? `${temperature} °C` : 'N/A',
-          fanSpeed: fanSpeed ? `${fanSpeed} %` : 'N/A',
-          powerDraw: powerDraw ? `${powerDraw} W` : 'N/A',
-          powerLimit: powerLimit ? `${powerLimit} W` : 'N/A',
-          memoryTotal: memoryTotal ? `${memoryTotal} MiB` : 'N/A',
-          memoryUsed: memoryUsed ? `${memoryUsed} MiB` : 'N/A',
-          memoryFree: memoryFree ? `${memoryFree} MiB` : 'N/A',
-          utilization: utilization ? `${utilization} %` : 'N/A',
-          status: 'available'
-        };
-      });
+      return lines.map(line => parseGpuLine(line));
     } catch (sshError) {
       console.error('SSH fallback failed:', sshError.message);
       return [{
@@ -252,6 +258,8 @@ async function fallbackNvidiaSmi() {
         utilization: 'N/A',
         status: 'Error retrieving GPU info via SSH: ' + sshError.message
       }];
+    } finally {
+      ssh.dispose(); // Always close the SSH connection
     }
   }
 }

@@ -6,6 +6,7 @@ const fs = require('fs');
 const ssh = new NodeSSH();
 const privateKey = fs.readFileSync('/root/.ssh/id_rsa', 'utf8');
 const execPromise = util.promisify(exec);
+
 async function shutdown() {
   try {
     // 1. Only on Linux
@@ -25,7 +26,7 @@ async function shutdown() {
         host: '172.17.0.1',             // or host.docker.internal
         username: 'aiserver',
         privateKey,
-        // We’ve mounted a valid known_hosts file at /root/.ssh/known_hosts,
+        // We've mounted a valid known_hosts file at /root/.ssh/known_hosts,
         // so no need to disable verification here.
       });
 
