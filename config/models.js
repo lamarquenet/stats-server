@@ -6,6 +6,22 @@
  */
 
 const VLLM_MODELS = {
+  'cyankiwi-qwen3-coder-next': {
+    id: 'cyankiwi/Qwen3-Coder-Next-AWQ-4bit',
+    name: 'Qwen3 Coder Next (AWQ 4bit)',
+    description: 'FP8 KV cache + AWQ 4bit, 80% GPU memory, 131K context',
+    gpuMemoryUtilization: 0.80,
+    maxModelLen: 131000,
+    port: 8001,
+    tensorParallelSize: 4,
+    kvCacheDtype: 'fp8',
+    toolCallParser: 'qwen3_coder',
+    enableAutoToolChoice: true,
+    envVars: {
+      VLLM_ALLOW_LONG_MAX_MODEL_LEN: '1',
+    },
+    cudaDevices: '0,1,2,3',
+  },
   'devstral-standard': {
     id: 'mistralai/Devstral-Small-2505',
     name: 'Devstral Small',
@@ -84,7 +100,7 @@ const VLLM_MODELS = {
     name: 'Devstral Small (GPTQ)',
     description: 'GPTQ 4-bit - lowest memory usage',
     gpuMemoryUtilization: 0.90,
-    maxModelLen: 8131072536,
+    maxModelLen: 131000,
     port: 8001,
     tokenizerMode: 'mistral',
     configFormat: 'mistral',

@@ -7,6 +7,29 @@ const ssh = new NodeSSH();
 const privateKey = fs.readFileSync('/root/.ssh/id_rsa', 'utf8');
 
 /**
+ * Build environment variables prefix for the command
+ * @param {Object} modelConfig - Model configuration object
+ * @returns {string} Environment variables string
+ */
+function buildEnvPrefix(modelConfig) {
+  const envParts = [];
+
+  // Add CUDA_VISIBLE_DEVICES if specified
+  if (modelConfig.cudaDevices) {
+    envParts.push(`CUDA_VISIBLE_DEVICES=${modelConfig.cudaDevices}`);
+  }
+
+  // Add custom environment variables
+  if (modelConfig.envVars) {
+    for (const [key, value] of Object.entries(modelConfig.envVars)) {
+      envParts.push(`${key}=${value}`);
+    }
+  }
+
+  return envParts.length > 0 ? envParts.join(' ') + ' ' : '';
+}
+
+/**
  * Build vLLM command string based on model configuration
  * @param {Object} modelConfig - Model configuration object
  * @returns {string} Command string to execute
@@ -19,6 +42,7 @@ function buildVllmCommand(modelConfig) {
     `--gpu-memory-utilization ${modelConfig.gpuMemoryUtilization}`,
     `--max-model-len ${modelConfig.maxModelLen}`,
     `--port ${modelConfig.port}`,
+    `--enable-prefix-caching`,  // Always enabled for all models
   ];
 
   // Add optional parameters
@@ -40,7 +64,7 @@ function buildVllmCommand(modelConfig) {
   if (modelConfig.tensorParallelSize) {
     parts.push(`--tensor-parallel-size ${modelConfig.tensorParallelSize}`);
   }
-  
+
   // Quantization options
   if (modelConfig.quantization) {
     parts.push(`--quantization ${modelConfig.quantization}`);
@@ -72,8 +96,9 @@ async function startVLLMServer(modelKey = null) {
       privateKey,
     });
 
+    const envPrefix = buildEnvPrefix(modelConfig);
     const vllmCommand = buildVllmCommand(modelConfig);
-    const command = `bash -lc "source ~/miniconda3/etc/profile.d/conda.sh && conda activate vllm-conda-env && nohup ${vllmCommand} > vllm.log 2>&1 &"`;
+    const command = `bash -lc "source ~/miniconda3/etc/profile.d/conda.sh && conda activate vllm-conda-env && nohup ${envPrefix}${vllmCommand} > /home/aiserver/vllm.log 2>&1 &"`;
 
     console.log(`Starting vLLM server with model: ${selectedModelKey}`);
     console.log(`Command: ${command}`);
@@ -93,7 +118,11 @@ async function startVLLMServer(modelKey = null) {
   }
 }
 
-async function stopVLLMServer() {
+/**
+ * Stop the vLLM server on specified port
+ * @param {number} port - Port number to stop (default: 8001)
+ */
+async function stopVLLMServer(port = 8001) {
   try {
     await ssh.connect({
       host: '172.17.0.1',
@@ -102,7 +131,7 @@ async function stopVLLMServer() {
     });
 
     // This finds the PID of the vllm serve command and kills it
-    const stopCommand = `pkill -f "vllm serve.*--port 8001"`;
+    const stopCommand = `pkill -f "vllm serve.*--port ${port}"`;
 
     console.log('Stopping vLLM server remotely...');
     const result = await ssh.execCommand(stopCommand);
