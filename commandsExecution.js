@@ -98,7 +98,7 @@ async function startVLLMServer(modelKey = null) {
 
     const envPrefix = buildEnvPrefix(modelConfig);
     const vllmCommand = buildVllmCommand(modelConfig);
-    const command = `bash -lc "source ~/miniconda3/etc/profile.d/conda.sh && conda activate vllm-conda-env && nohup ${envPrefix}${vllmCommand} > /home/aiserver/vllm.log 2>&1 &"`;
+    const command = `bash -lc "source ~/miniconda3/etc/profile.d/conda.sh && conda activate vllm-conda-env && ${envPrefix}nohup ${vllmCommand} > /home/aiserver/vllm.log 2>&1 &"`;
 
     console.log(`Starting vLLM server with model: ${selectedModelKey}`);
     console.log(`Command: ${command}`);
