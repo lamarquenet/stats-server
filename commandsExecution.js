@@ -16,17 +16,17 @@ function buildEnvPrefix(modelConfig) {
 
   // Add CUDA_VISIBLE_DEVICES if specified
   if (modelConfig.cudaDevices) {
-    envParts.push(`CUDA_VISIBLE_DEVICES=${modelConfig.cudaDevices}`);
+    envParts.push(`export CUDA_VISIBLE_DEVICES=${modelConfig.cudaDevices}`);
   }
 
   // Add custom environment variables
   if (modelConfig.envVars) {
     for (const [key, value] of Object.entries(modelConfig.envVars)) {
-      envParts.push(`${key}=${value}`);
+      envParts.push(`export ${key}=${value}`);
     }
   }
 
-  return envParts.length > 0 ? envParts.join(' ') + ' ' : '';
+  return envParts.length > 0 ? envParts.join(' && ') + ' && ' : '';
 }
 
 /**

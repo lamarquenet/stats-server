@@ -32,13 +32,12 @@ async function getGpuMemoryInfo() {
     }), { total: 0, used: 0, free: 0 });
 
     return {
-      totalGB: (totals.total / 1024).toFixed(2),
-      usedGB: (totals.used / 1024).toFixed(2),
-      freeGB: (totals.free / 1024).toFixed(2),
-      usagePercent: totals.total > 0 ? ((totals.used / totals.total) * 100).toFixed(1) : 0,
+      totalGB: parseFloat((totals.total / 1024).toFixed(2)),
+      usedGB: parseFloat((totals.used / 1024).toFixed(2)),
+      freeGB: parseFloat((totals.free / 1024).toFixed(2)),
+      usagePercent: parseFloat(totals.total > 0 ? ((totals.used / totals.total) * 100).toFixed(1) : 0),
     };
   } catch (err) {
-    // Try SSH fallback if local nvidia-smi fails
     return null;
   }
 }
