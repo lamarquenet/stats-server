@@ -42,8 +42,12 @@ function buildVllmCommand(modelConfig) {
     `--gpu-memory-utilization ${modelConfig.gpuMemoryUtilization}`,
     `--max-model-len ${modelConfig.maxModelLen}`,
     `--port ${modelConfig.port}`,
-    `--enable-prefix-caching`,  // Always enabled for all models
   ];
+
+  // Add prefix caching only if explicitly enabled (default: false)
+  if (modelConfig.prefixCaching) {
+    parts.push(`--enable-prefix-caching`);
+  }
 
   // Add optional parameters
   if (modelConfig.tokenizerMode) {

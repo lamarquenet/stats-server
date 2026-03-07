@@ -17,6 +17,7 @@ const VLLM_MODELS = {
     kvCacheDtype: 'fp8',
     toolCallParser: 'qwen3_coder',
     enableAutoToolChoice: true,
+    prefixCaching: false,  // Disabled - causes memory issues with large context
     envVars: {
       VLLM_ALLOW_LONG_MAX_MODEL_LEN: '1',
     },
