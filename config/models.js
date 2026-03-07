@@ -9,7 +9,7 @@ const VLLM_MODELS = {
   'cyankiwi-qwen3-coder-next': {
     id: 'cyankiwi/Qwen3-Coder-Next-AWQ-4bit',
     name: 'Qwen3 Coder Next (AWQ 4bit)',
-    description: 'FP8 KV cache + AWQ 4bit, 80% GPU memory, 128K context',
+    description: 'FP8 KV cache + AWQ 4bit, 80% GPU memory, 128K context (default)',
     gpuMemoryUtilization: 0.80,
     maxModelLen: 128000,
     port: 8001,
@@ -130,7 +130,7 @@ const VLLM_MODELS = {
 
 /**
  * Get model configuration by key
- * @param {string} modelKey - The model key (e.g., 'devstral-standard')
+ * @param {string} modelKey - The model key (e.g., 'cyankiwi-qwen3-coder-next')
  * @returns {Object|null} Model configuration or null if not found
  */
 function getModelConfig(modelKey) {
@@ -147,6 +147,13 @@ function getAllModels() {
     id: model.id,
     name: model.name,
     description: model.description,
+    // Include full config for UI display
+    quantization: model.quantization || null,
+    maxModelLen: model.maxModelLen,
+    kvCacheDtype: model.kvCacheDtype || null,
+    gpuMemoryUtilization: model.gpuMemoryUtilization,
+    tensorParallelSize: model.tensorParallelSize || 1,
+    port: model.port || 8001,
   }));
 }
 
@@ -155,7 +162,7 @@ function getAllModels() {
  * @returns {string} Default model key
  */
 function getDefaultModelKey() {
-  return 'devstral-standard';
+  return 'cyankiwi-qwen3-coder-next';
 }
 
 module.exports = {
