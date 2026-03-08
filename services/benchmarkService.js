@@ -11,8 +11,7 @@ const BENCHMARKS_FILE = 'benchmarks.json';
 
 // Fixed benchmark configuration
 const BENCHMARK_PROMPT = "Write a short poem about artificial intelligence.";
-const BENCHMARK_MAX_TOKENS = 100;
-const BENCHMARK_TEMPERATURE = 0.7;
+const BENCHMARK_MAX_TOKENS = 1000;
 
 /**
  * Get GPU memory info from nvidia-smi
@@ -42,25 +41,23 @@ async function getGpuMemoryInfo() {
 }
 
 /**
- * Run benchmark on vLLM
+ * Run benchmark on vLLM - simple direct call
  */
 async function runVllmBenchmark(model) {
   const benchmarkId = `bench_${Date.now()}`;
   const startTime = Date.now();
 
   try {
-    // Use streaming to measure TTFT
+    // Simple completion request - no temperature, let vLLM use its defaults
     const response = await axios({
       method: 'POST',
       url: `${VLLM_URL}/v1/completions`,
       data: {
         model: model,
         prompt: BENCHMARK_PROMPT,
-        max_tokens: BENCHMARK_MAX_TOKENS,
-        temperature: BENCHMARK_TEMPERATURE,
-        stream: false
+        max_tokens: BENCHMARK_MAX_TOKENS
       },
-      timeout: 60000
+      timeout: 180000
     });
 
     const totalLatencyMs = Date.now() - startTime;
@@ -73,10 +70,6 @@ async function runVllmBenchmark(model) {
       ? (tokensGenerated / (totalLatencyMs / 1000)).toFixed(2)
       : null;
 
-    // TTFT estimation (vLLM doesn't return this in non-streaming)
-    // We'll estimate as 10-20% of total latency for first token
-    const estimatedTtft = Math.round(totalLatencyMs * 0.15);
-
     const output = data.choices?.[0]?.text || '';
 
     // Get system state
@@ -88,12 +81,12 @@ async function runVllmBenchmark(model) {
       service: 'vllm',
       prompt: BENCHMARK_PROMPT,
       results: {
-        timeToFirstTokenMs: estimatedTtft,
+        timeToFirstTokenMs: null, // Not available in non-streaming
         tokensGenerated,
         promptTokens,
         totalLatencyMs,
         tokensPerSecond: tokensPerSecond ? parseFloat(tokensPerSecond) : null,
-        output: output.substring(0, 200) // Truncate for storage
+        output: output.substring(0, 200)
       },
       systemState: {
         gpuMemoryUsed: gpuState.memoryUsedGB + ' GB',
@@ -102,9 +95,7 @@ async function runVllmBenchmark(model) {
       timestamp: new Date().toISOString()
     };
 
-    // Save to history
     saveBenchmarkResult(result);
-
     return result;
 
   } catch (err) {
@@ -127,12 +118,11 @@ async function runOllamaBenchmark(model) {
         model: model,
         prompt: BENCHMARK_PROMPT,
         options: {
-          num_predict: BENCHMARK_MAX_TOKENS,
-          temperature: BENCHMARK_TEMPERATURE
+          num_predict: BENCHMARK_MAX_TOKENS
         },
         stream: false
       },
-      timeout: 60000
+      timeout: 120000
     });
 
     const totalLatencyMs = Date.now() - startTime;
@@ -144,9 +134,8 @@ async function runOllamaBenchmark(model) {
       ? (tokensGenerated / (totalLatencyMs / 1000)).toFixed(2)
       : null;
 
-    // Ollama provides actual TTFT
     const ttft = data.prompt_eval_duration
-      ? Math.round(data.prompt_eval_duration / 1000000) // nanoseconds to ms
+      ? Math.round(data.prompt_eval_duration / 1000000)
       : null;
 
     const output = data.response || '';
@@ -174,7 +163,6 @@ async function runOllamaBenchmark(model) {
     };
 
     saveBenchmarkResult(result);
-
     return result;
 
   } catch (err) {
