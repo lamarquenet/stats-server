@@ -8,7 +8,7 @@ const privateKey = fs.readFileSync('/root/.ssh/id_rsa', 'utf8');
 // Cache to avoid hammering SSH
 let cachedData = null;
 let cacheTime = 0;
-const CACHE_TTL = 5000; // 5 seconds
+const CACHE_TTL = 60000; // 60 seconds (1 minute)
 
 /**
  * Get power cost data from aiserver

@@ -55,6 +55,13 @@ function parsePrometheusMetrics(metricsText) {
  * Calculate tokens per second from vLLM metrics
  */
 function calculateTokensPerSecond(metrics) {
+  // Try time_per_output_token first (most accurate)
+  const tpot = metrics['vllm:time_per_output_token_seconds'];
+  if (tpot && tpot > 0) {
+    return 1 / tpot; // tokens per second = 1 / seconds per token
+  }
+
+  // Fallback: iteration metrics
   const iterationTokens = metrics['vllm:iteration_tokens_total'] || 0;
   const iterationTime = metrics['vllm:iteration_latency_seconds_total'] || 0;
 
@@ -62,7 +69,8 @@ function calculateTokensPerSecond(metrics) {
     return iterationTokens / iterationTime;
   }
 
-  const totalTokens = metrics['vllm:num_generation_tokens_total'] || 0;
+  // Last resort: total tokens / total time
+  const totalTokens = metrics['vllm:generation_tokens_total'] || metrics['vllm:num_generation_tokens_total'] || 0;
   const totalTime = metrics['vllm:e2e_request_latency_seconds_sum'] || 0;
 
   if (totalTime > 0 && totalTokens > 0) {
@@ -109,8 +117,8 @@ async function pollVllmMetrics() {
       requestsRunning: metrics['vllm:num_requests_running'] || 0,
       requestsWaiting: metrics['vllm:num_requests_waiting'] || 0,
       avgTimeToFirstToken: null,
-      totalPromptTokens: metrics['vllm:num_prompt_tokens_total'] || 0,
-      totalGenerationTokens: metrics['vllm:num_generation_tokens_total'] || 0
+      totalPromptTokens: metrics['vllm:prompt_tokens_total'] || metrics['vllm:num_prompt_tokens_total'] || 0,
+      totalGenerationTokens: metrics['vllm:generation_tokens_total'] || metrics['vllm:num_generation_tokens_total'] || 0
     };
 
     // Calculate average TTFT
