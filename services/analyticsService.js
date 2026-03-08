@@ -73,9 +73,27 @@ function calculateTokensPerSecond(metrics) {
 }
 
 /**
+ * Check if vLLM is running
+ */
+async function isVllmRunning() {
+  try {
+    await axios.get(`${VLLM_URL}/health`, { timeout: 2000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Fetch current vLLM metrics and update analytics
  */
 async function pollVllmMetrics() {
+  // Only poll if vLLM is running
+  const running = await isVllmRunning();
+  if (!running) {
+    return readJson(ANALYTICS_FILE, getDefaultAnalytics());
+  }
+
   try {
     const response = await axios.get(`${VLLM_URL}/metrics`, { timeout: 3000 });
     const metrics = parsePrometheusMetrics(response.data);
@@ -145,7 +163,10 @@ async function pollVllmMetrics() {
 
     return analytics;
   } catch (err) {
-    console.error('Error polling vLLM metrics:', err.message);
+    // Only log unexpected errors (not connection issues since we already checked health)
+    if (!err.code || err.code !== 'ECONNREFUSED') {
+      console.error('Error polling vLLM metrics:', err.message);
+    }
     return readJson(ANALYTICS_FILE, getDefaultAnalytics());
   }
 }
