@@ -20,6 +20,7 @@ const VLLM_MODELS = {
     prefixCaching: false,  // Disabled - causes memory issues with large context
     envVars: {
       VLLM_ALLOW_LONG_MAX_MODEL_LEN: '1',
+      PYTORCH_CUDA_ALLOC_CONF: 'expandable_segments:True',
     },
     cudaDevices: '0,1,2,3',
   },
