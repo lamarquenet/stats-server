@@ -57,4 +57,60 @@ async function getCostData() {
   }
 }
 
-module.exports = { getCostData };
+/**
+ * Reset session energy counter
+ */
+async function resetSessionEnergy() {
+  try {
+    await ssh.connect({
+      host: '172.17.0.1',
+      username: 'aiserver',
+      privateKey,
+    });
+
+    // Reset power_tools.txt to 0
+    await ssh.execCommand('echo 0 | sudo tee /home/aiserver/power_tools.txt > /dev/null');
+
+    // Clear cache to force refresh
+    cachedData = null;
+    cacheTime = 0;
+
+    return { success: true, message: 'Session energy counter reset' };
+
+  } catch (err) {
+    console.error('Error resetting session energy:', err.message);
+    throw err;
+  } finally {
+    ssh.dispose();
+  }
+}
+
+/**
+ * Reset monthly energy counter
+ */
+async function resetMonthlyEnergy() {
+  try {
+    await ssh.connect({
+      host: '172.17.0.1',
+      username: 'aiserver',
+      privateKey,
+    });
+
+    // Reset monthly log to 0
+    await ssh.execCommand('echo 0 | sudo tee /var/log/monthly_power_usage.log > /dev/null');
+
+    // Clear cache to force refresh
+    cachedData = null;
+    cacheTime = 0;
+
+    return { success: true, message: 'Monthly energy counter reset' };
+
+  } catch (err) {
+    console.error('Error resetting monthly energy:', err.message);
+    throw err;
+  } finally {
+    ssh.dispose();
+  }
+}
+
+module.exports = { getCostData, resetSessionEnergy, resetMonthlyEnergy };
