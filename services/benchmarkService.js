@@ -41,62 +41,96 @@ async function getGpuMemoryInfo() {
 }
 
 /**
- * Run benchmark on vLLM - simple direct call
+ * Run benchmark on vLLM using streaming to measure TTFT
  */
 async function runVllmBenchmark(model) {
   const benchmarkId = `bench_${Date.now()}`;
   const startTime = Date.now();
+  let ttft = null;
+  let firstTokenTime = null;
+  let tokensGenerated = 0;
+  let fullOutput = '';
 
   try {
-    // Simple completion request - no temperature, let vLLM use its defaults
+    // Use streaming to measure TTFT
     const response = await axios({
       method: 'POST',
       url: `${VLLM_URL}/v1/completions`,
       data: {
         model: model,
         prompt: BENCHMARK_PROMPT,
-        max_tokens: BENCHMARK_MAX_TOKENS
+        max_tokens: BENCHMARK_MAX_TOKENS,
+        stream: true
       },
-      timeout: 180000
+      responseType: 'stream',
+      timeout: 300000 // 5 minutes
     });
 
-    const totalLatencyMs = Date.now() - startTime;
-    const data = response.data;
+    return new Promise((resolve, reject) => {
+      response.data.on('data', (chunk) => {
+        const lines = chunk.toString().split('\n').filter(line => line.trim());
 
-    // Calculate metrics
-    const tokensGenerated = data.usage?.completion_tokens || 0;
-    const promptTokens = data.usage?.prompt_tokens || 0;
-    const tokensPerSecond = tokensGenerated > 0 && totalLatencyMs > 0
-      ? (tokensGenerated / (totalLatencyMs / 1000)).toFixed(2)
-      : null;
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
 
-    const output = data.choices?.[0]?.text || '';
+            try {
+              const parsed = JSON.parse(data);
+              const text = parsed.choices?.[0]?.text || '';
 
-    // Get system state
-    const gpuState = await getGpuMemoryInfo();
+              if (text) {
+                // First token - measure TTFT
+                if (firstTokenTime === null) {
+                  firstTokenTime = Date.now();
+                  ttft = firstTokenTime - startTime;
+                }
+                tokensGenerated++;
+                fullOutput += text;
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
+      });
 
-    const result = {
-      benchmarkId,
-      model,
-      service: 'vllm',
-      prompt: BENCHMARK_PROMPT,
-      results: {
-        timeToFirstTokenMs: null, // Not available in non-streaming
-        tokensGenerated,
-        promptTokens,
-        totalLatencyMs,
-        tokensPerSecond: tokensPerSecond ? parseFloat(tokensPerSecond) : null,
-        output: output.substring(0, 200)
-      },
-      systemState: {
-        gpuMemoryUsed: gpuState.memoryUsedGB + ' GB',
-        gpuUtilization: gpuState.utilizationPercent + '%'
-      },
-      timestamp: new Date().toISOString()
-    };
+      response.data.on('end', async () => {
+        const totalLatencyMs = Date.now() - startTime;
+        const tokensPerSecond = tokensGenerated > 0 && totalLatencyMs > 0
+          ? (tokensGenerated / (totalLatencyMs / 1000)).toFixed(2)
+          : null;
 
-    saveBenchmarkResult(result);
-    return result;
+        const gpuState = await getGpuMemoryInfo();
+
+        const result = {
+          benchmarkId,
+          model,
+          service: 'vllm',
+          prompt: BENCHMARK_PROMPT,
+          results: {
+            timeToFirstTokenMs: ttft,
+            tokensGenerated,
+            promptTokens: BENCHMARK_PROMPT.split(' ').length, // Approximate
+            totalLatencyMs,
+            tokensPerSecond: tokensPerSecond ? parseFloat(tokensPerSecond) : null,
+            output: fullOutput.substring(0, 200)
+          },
+          systemState: {
+            gpuMemoryUsed: gpuState.memoryUsedGB + ' GB',
+            gpuUtilization: gpuState.utilizationPercent + '%'
+          },
+          timestamp: new Date().toISOString()
+        };
+
+        saveBenchmarkResult(result);
+        resolve(result);
+      });
+
+      response.data.on('error', (err) => {
+        reject(new Error(`vLLM benchmark failed: ${err.message}`));
+      });
+    });
 
   } catch (err) {
     throw new Error(`vLLM benchmark failed: ${err.message}`);
@@ -122,7 +156,7 @@ async function runOllamaBenchmark(model) {
         },
         stream: false
       },
-      timeout: 120000
+      timeout: 300000 // 5 minutes
     });
 
     const totalLatencyMs = Date.now() - startTime;
@@ -134,6 +168,7 @@ async function runOllamaBenchmark(model) {
       ? (tokensGenerated / (totalLatencyMs / 1000)).toFixed(2)
       : null;
 
+    // Ollama provides actual TTFT
     const ttft = data.prompt_eval_duration
       ? Math.round(data.prompt_eval_duration / 1000000)
       : null;
