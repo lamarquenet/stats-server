@@ -5,6 +5,7 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const systemInfo = require('./systemInfo');
+const analyticsService = require('./services/analyticsService');
 
 // Load environment variables
 dotenv.config();
@@ -30,6 +31,12 @@ app.use('/api/ollama', require('./routes/ollamaRoutes'));
 app.use('/api/logs', require('./routes/logsRoutes'));
 app.use('/api/performance', require('./routes/performanceRoutes'));
 app.use('/api/llamacpp', require('./routes/llamaCppRoutes'));
+app.use('/api/cost', require('./routes/costRoutes'));
+app.use('/api/analytics', require('./routes/analyticsRoutes'));
+app.use('/api/benchmark', require('./routes/benchmarkRoutes'));
+
+// Start analytics polling
+analyticsService.startPolling();
 
 // Serve static files from the React app in production
 if (process.env.NODE_ENV === 'production') {
