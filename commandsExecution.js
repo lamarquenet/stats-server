@@ -1,7 +1,7 @@
 const { NodeSSH } = require('node-ssh');
 const fs = require('fs');
 const axios = require('axios');
-const { getModelConfig, getDefaultModelKey } = require('./config/models');
+const { getModelConfig, getDefaultModelKey, validateOverrides } = require('./config/models');
 
 const ssh = new NodeSSH();
 const privateKey = fs.readFileSync('/root/.ssh/id_rsa', 'utf8');
@@ -84,20 +84,35 @@ function buildVllmCommand(modelConfig) {
     parts.push(`--kv-cache-dtype ${modelConfig.kvCacheDtype}`);
   }
 
+  // Serve-time default sampling params (e.g. thinking vs instruct sets)
+  if (modelConfig.generationConfigOverride) {
+    parts.push(`--override-generation-config ${modelConfig.generationConfigOverride}`);
+  }
+
   return parts.join(' ');
 }
 
 /**
  * Start the vLLM server with specified model
  * @param {string} modelKey - Optional model key to use (defaults to the default model key)
+ * @param {Object|null} overrides - Optional launch overrides (validated & merged into the config)
+ * @returns {Object} The resolved (merged) model configuration that was launched
  */
-async function startVLLMServer(modelKey = null) {
+async function startVLLMServer(modelKey = null, overrides = null) {
   // Get model configuration
   const selectedModelKey = modelKey || getDefaultModelKey();
-  const modelConfig = getModelConfig(selectedModelKey);
-  
-  if (!modelConfig) {
+  const baseConfig = getModelConfig(selectedModelKey);
+
+  if (!baseConfig) {
     throw new Error(`Unknown model: ${selectedModelKey}`);
+  }
+
+  // Validate and merge launch overrides (allowlist + ranges)
+  const { merged: modelConfig, errors } = validateOverrides(baseConfig, overrides);
+  if (errors.length) {
+    const err = new Error(`Invalid overrides: ${errors.join('; ')}`);
+    err.name = 'ValidationError';
+    throw err;
   }
 
   try {
@@ -120,6 +135,19 @@ async function startVLLMServer(modelKey = null) {
     } else {
       console.log('vLLM server started successfully');
     }
+
+    return {
+      key: selectedModelKey,
+      id: modelConfig.id,
+      tensorParallelSize: modelConfig.tensorParallelSize,
+      cudaDevices: modelConfig.cudaDevices,
+      gpuMemoryUtilization: modelConfig.gpuMemoryUtilization,
+      maxModelLen: modelConfig.maxModelLen,
+      kvCacheDtype: modelConfig.kvCacheDtype || 'auto',
+      speculativeConfig: modelConfig.speculativeConfig || null,
+      reasoningParser: modelConfig.reasoningParser || null,
+      generationConfigOverride: modelConfig.generationConfigOverride || null,
+    };
 
   } catch (err) {
     console.error('SSH connection or command failed:', err);
