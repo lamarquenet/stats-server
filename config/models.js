@@ -51,9 +51,10 @@ const VLLM_MODELS = {
   'qwen38-27b-int8': {
     id: 'lued/Qwen3.8-27B-INT8-W8A16-MTP',
     name: 'Qwen3.8-27B (INT8 W8A16)',
-    description: 'Near-native fidelity INT8, MTP speculative decoding, 262K ctx, TP=2 on GPUs 0-1 (2 GPUs left free)',
-    gpuMemoryUtilization: 0.90,
-    maxModelLen: 262144,
+    description: 'Near-native fidelity INT8, MTP speculative decoding, TP=2 on GPUs 0-1 (2 GPUs left free). 131K ctx at 0.93 mem (262K requires TP=4 override)',
+    gpuMemoryUtilization: 0.93,
+    maxModelLen: 131072,
+    maxModelLenNative: 262144,  // native cap for overrides (262K only fits with TP=4)
     port: 8001,
     tensorParallelSize: 2,
     cudaDevices: '0,1',
@@ -134,9 +135,10 @@ function validateOverrides(modelConfig, overrides) {
   }
 
   if (o.maxModelLen !== undefined) {
+    const nativeCap = modelConfig.maxModelLenNative || modelConfig.maxModelLen;
     const v = Number(o.maxModelLen);
-    if (!Number.isInteger(v) || v < 4096 || v > modelConfig.maxModelLen) {
-      errors.push(`maxModelLen must be an integer between 4096 and ${modelConfig.maxModelLen} (model cap)`);
+    if (!Number.isInteger(v) || v < 4096 || v > nativeCap) {
+      errors.push(`maxModelLen must be an integer between 4096 and ${nativeCap} (model native cap)`);
     } else {
       merged.maxModelLen = v;
     }
@@ -218,6 +220,7 @@ function getAllModels() {
     // Include full config for UI display
     quantization: model.quantization || null,
     maxModelLen: model.maxModelLen,
+    maxModelLenNative: model.maxModelLenNative || model.maxModelLen,
     kvCacheDtype: model.kvCacheDtype || null,
     gpuMemoryUtilization: model.gpuMemoryUtilization,
     tensorParallelSize: model.tensorParallelSize || 1,
