@@ -40,9 +40,13 @@ function buildVllmCommand(modelConfig) {
     modelConfig.id,
     `--host 0.0.0.0`,
     `--gpu-memory-utilization ${modelConfig.gpuMemoryUtilization}`,
-    `--max-model-len ${modelConfig.maxModelLen}`,
     `--port ${modelConfig.port}`,
   ];
+
+  // Omitted when 'auto': vLLM then uses the model's native max context
+  if (modelConfig.maxModelLen) {
+    parts.push(`--max-model-len ${modelConfig.maxModelLen}`);
+  }
 
   // Add prefix caching only if explicitly enabled (default: false)
   if (modelConfig.prefixCaching) {

@@ -139,12 +139,16 @@ function validateOverrides(modelConfig, overrides) {
   }
 
   if (o.maxModelLen !== undefined) {
-    const nativeCap = modelConfig.maxModelLenNative || modelConfig.maxModelLen;
-    const v = Number(o.maxModelLen);
-    if (!Number.isInteger(v) || v < 4096 || v > nativeCap) {
-      errors.push(`maxModelLen must be an integer between 4096 and ${nativeCap} (model native cap)`);
+    if (o.maxModelLen === 'auto') {
+      delete merged.maxModelLen;  // omit flag: vLLM uses the model's native max
     } else {
-      merged.maxModelLen = v;
+      const nativeCap = modelConfig.maxModelLenNative || modelConfig.maxModelLen;
+      const v = Number(o.maxModelLen);
+      if (!Number.isInteger(v) || v < 4096 || v > nativeCap) {
+        errors.push(`maxModelLen must be 'auto' or an integer between 4096 and ${nativeCap} (model native cap)`);
+      } else {
+        merged.maxModelLen = v;
+      }
     }
   }
 
