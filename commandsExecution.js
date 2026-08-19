@@ -62,6 +62,13 @@ function buildVllmCommand(modelConfig) {
   if (modelConfig.toolCallParser) {
     parts.push(`--tool-call-parser ${modelConfig.toolCallParser}`);
   }
+  if (modelConfig.reasoningParser) {
+    parts.push(`--reasoning-parser ${modelConfig.reasoningParser}`);
+  }
+  // JSON value: single-quote it and escape inner double quotes so it survives the bash -lc "..." wrapper
+  if (modelConfig.speculativeConfig) {
+    parts.push(`--speculative-config '${modelConfig.speculativeConfig.replace(/"/g, '\\"')}'`);
+  }
   if (modelConfig.enableAutoToolChoice) {
     parts.push(`--enable-auto-tool-choice`);
   }
@@ -82,7 +89,7 @@ function buildVllmCommand(modelConfig) {
 
 /**
  * Start the vLLM server with specified model
- * @param {string} modelKey - Optional model key to use (defaults to devstral-standard)
+ * @param {string} modelKey - Optional model key to use (defaults to the default model key)
  */
 async function startVLLMServer(modelKey = null) {
   // Get model configuration

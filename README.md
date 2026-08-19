@@ -24,13 +24,12 @@ The piserver dashboard (192.168.8.170) calls this API.
 
 | Key | Name | Context | KV Cache | Quantization | GPU % | TP |
 |-----|------|---------|----------|--------------|-------|-----|
-| `devstral-standard` | Devstral Small | 85K | - | - | 90% | 4 |
-| `devstral-max-context` | Devstral Small Max | 131K | - | - | 90% | 4 |
-| `devstral-fp8` | Devstral Small (FP8) | 85K | FP8 | - | 80% | 4 |
-| `devstral-fp8-max` | Devstral Small (FP8 + Max) | 110K | FP8 | - | 80% | 4 |
-| `devstral-awq` | Devstral Small (AWQ) | 85K | - | AWQ | 80% | 4 |
-| `devstral-gptq` | Devstral Small (GPTQ) | 85K | - | GPTQ | 80% | 4 |
-| `devstral-fp8-awq` | Devstral Small (FP8 + AWQ) | 110K | FP8 | AWQ | 80% | 2 |
+| `cyankiwi-qwen3-coder-next` | Qwen3 Coder Next (AWQ 4bit) | 128K | FP8 | AWQ 4bit | 80% | 4 |
+| `qwen38-27b-awq` | Qwen3.8-27B (AWQ INT4) | 262K | FP8 | AWQ 4bit + MTP | 90% | 2 (GPUs 0-1) |
+| `qwen38-27b-int8` | Qwen3.8-27B (INT8 W8A16) | 262K | FP8 | INT8 + MTP | 90% | 2 (GPUs 0-1) |
+
+> Devstral Small 2505 configurations were removed on 2026-08-17 (model deprecated; weights deleted from the HF cache).
+> `qwen38-27b-awq` uses speculative decoding (MTP) and a reasoning parser; requires vLLM ≥ 0.17. Leaves GPUs 2-3 free for Ollama/llama.cpp.
 
 ### Configuration Options
 

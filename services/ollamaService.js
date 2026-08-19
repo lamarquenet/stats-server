@@ -33,7 +33,7 @@ async function executeSSHCommand(command) {
  */
 async function startOllamaService() {
   try {
-    const result = await executeSSHCommand('nohup ollama serve > ollama.log 2>&1 &');
+    const result = await executeSSHCommand('OLLAMA_HOST=0.0.0.0 nohup ollama serve > ollama.log 2>&1 &');
     
     if (result.stderr && !result.stderr.includes('background')) {
       console.error('Error starting Ollama:', result.stderr);

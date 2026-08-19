@@ -64,7 +64,7 @@ router.get('/config', (req, res) => {
   res.json({
     prompt: benchmarkService.BENCHMARK_PROMPT,
     maxTokens: benchmarkService.BENCHMARK_MAX_TOKENS,
-    temperature: 0.7
+    temperature: 1.0,
   });
 });
 
