@@ -31,11 +31,23 @@ async function getGpuMemoryInfo() {
       free: acc.free + (gpu.free || 0),
     }), { total: 0, used: 0, free: 0 });
 
+    // Active GPUs only (any real usage) — with TP < #GPUs the model occupies
+    // a subset, and the usage percentage should be relative to that subset
+    const active = gpus.filter(g => (g.used || 0) > 500);
+    const activeBase = active.length > 0 ? active : gpus;
+    const activeTotals = activeBase.reduce((acc, gpu) => ({
+      total: acc.total + (gpu.total || 0),
+      used: acc.used + (gpu.used || 0),
+    }), { total: 0, used: 0 });
+
     return {
       totalGB: parseFloat((totals.total / 1024).toFixed(2)),
       usedGB: parseFloat((totals.used / 1024).toFixed(2)),
       freeGB: parseFloat((totals.free / 1024).toFixed(2)),
-      usagePercent: parseFloat(totals.total > 0 ? ((totals.used / totals.total) * 100).toFixed(1) : 0),
+      usagePercent: parseFloat(activeTotals.total > 0 ? ((activeTotals.used / activeTotals.total) * 100).toFixed(1) : 0),
+      activeGpus: activeBase.length,
+      activeTotalGB: parseFloat((activeTotals.total / 1024).toFixed(2)),
+      activeUsedGB: parseFloat((activeTotals.used / 1024).toFixed(2)),
     };
   } catch (err) {
     return null;
@@ -68,30 +80,27 @@ function parsePrometheusMetrics(metricsText) {
 
 /**
  * Calculate tokens per second from vLLM metrics
+ * (metric names as of vLLM 0.2x+, with legacy fallbacks)
  */
 function calculateTokensPerSecond(metrics) {
-  // Try to get tokens per second from iteration counter
+  // Current names (vLLM >= 0.2x): generation tokens over total inference time
+  const genTokens = metrics['vllm:generation_tokens_total'];
+  const inferenceTime = metrics['vllm:request_inference_time_seconds_sum'];
+  if (genTokens > 0 && inferenceTime > 0) {
+    return genTokens / inferenceTime;
+  }
+
+  // Legacy names (vLLM < 0.2x)
   const iterationTokens = metrics['vllm:iteration_tokens_total'] || 0;
   const iterationTime = metrics['vllm:iteration_latency_seconds_total'] || 0;
-
   if (iterationTime > 0 && iterationTokens > 0) {
     return iterationTokens / iterationTime;
   }
 
-  // Alternative: generation tokens / total time
   const totalTokens = metrics['vllm:num_generation_tokens_total'] || 0;
   const totalTime = metrics['vllm:e2e_request_latency_seconds_sum'] || 0;
-
   if (totalTime > 0 && totalTokens > 0) {
     return totalTokens / totalTime;
-  }
-
-  // Another alternative from sum/count
-  const tokenSum = metrics['vllm:num_generation_tokens_sum'] || 0;
-  const tokenCount = metrics['vllm:num_generation_tokens_count'] || 0;
-
-  if (tokenCount > 0 && tokenSum > 0) {
-    return tokenSum / tokenCount;
   }
 
   return null;
@@ -154,19 +163,22 @@ async function getVllmMetrics() {
 
       const metrics = parsePrometheusMetrics(metricsResponse.data);
 
-      // KV Cache usage (GPU vs CPU/disk)
-      details.gpuCacheUsage = metrics['vllm:gpu_cache_usage_perc'] ?? null;
+      // KV Cache usage (GPU vs CPU/disk) — current name is kv_cache_usage_perc
+      const kvPerc = metrics['vllm:kv_cache_usage_perc'] ?? metrics['vllm:gpu_cache_usage_perc'] ?? null;
+      details.gpuCacheUsage = kvPerc;
       details.cpuCacheUsage = metrics['vllm:cpu_cache_usage_perc'] ?? null;
-      details.kvCacheUsedPerc = metrics['vllm:kv_cache_usage_perc'] ?? null;
+      details.kvCacheUsedPerc = kvPerc;
 
       // Request counts
       details.requestsRunning = metrics['vllm:num_requests_running'] || 0;
       details.requestsWaiting = metrics['vllm:num_requests_waiting'] || 0;
 
-      // Token statistics
-      details.totalPromptTokens = metrics['vllm:num_prompt_tokens_total'] ||
+      // Token statistics (current names first, legacy fallbacks)
+      details.totalPromptTokens = metrics['vllm:prompt_tokens_total'] ||
+                                   metrics['vllm:num_prompt_tokens_total'] ||
                                    metrics['vllm:num_prompt_tokens'] || 0;
-      details.totalGenerationTokens = metrics['vllm:num_generation_tokens_total'] ||
+      details.totalGenerationTokens = metrics['vllm:generation_tokens_total'] ||
+                                       metrics['vllm:num_generation_tokens_total'] ||
                                        metrics['vllm:num_generation_tokens'] || 0;
 
       // Calculate tokens per second
@@ -178,9 +190,16 @@ async function getVllmMetrics() {
       details.timeToFirstToken = ttftCount > 0 ? ttftSum / ttftCount : null;
 
       // Average tokens per request
-      const requestCount = metrics['vllm:e2e_request_latency_seconds_count'] || 0;
+      const requestCount = metrics['vllm:request_success_total'] ||
+                           metrics['vllm:e2e_request_latency_seconds_count'] || 0;
       details.avgTokensPerRequest = requestCount > 0 ?
         details.totalGenerationTokens / requestCount : null;
+
+      // Speculative decoding acceptance rate (MTP), when active
+      const specAccepted = metrics['vllm:spec_decode_num_accepted_tokens_total'];
+      const specDrafted = metrics['vllm:spec_decode_num_draft_tokens_total'];
+      details.speculativeAcceptance = (specAccepted > 0 && specDrafted > 0) ?
+        parseFloat((specAccepted / specDrafted).toFixed(3)) : null;
 
       // GPU memory from nvidia-smi
       details.gpuMemory = gpuMemory || {
