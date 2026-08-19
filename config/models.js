@@ -189,9 +189,8 @@ function validateOverrides(modelConfig, overrides) {
       errors.push('thinkingMode not supported by this model (non-thinking model)');
     } else {
       const set = SAMPLING[o.thinkingMode];
-      merged.generationConfigOverride = Object.entries(set)
-        .map(([k, v]) => `${k}=${v}`)
-        .join(',');
+      // vLLM >= 0.2x parses --override-generation-config as JSON (json.loads)
+      merged.generationConfigOverride = JSON.stringify(set);
     }
   }
 

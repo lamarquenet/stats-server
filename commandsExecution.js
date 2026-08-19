@@ -84,9 +84,9 @@ function buildVllmCommand(modelConfig) {
     parts.push(`--kv-cache-dtype ${modelConfig.kvCacheDtype}`);
   }
 
-  // Serve-time default sampling params (e.g. thinking vs instruct sets)
+  // Serve-time default sampling params (e.g. thinking vs instruct sets) — JSON value
   if (modelConfig.generationConfigOverride) {
-    parts.push(`--override-generation-config ${modelConfig.generationConfigOverride}`);
+    parts.push(`--override-generation-config '${modelConfig.generationConfigOverride.replace(/"/g, '\\"')}'`);
   }
 
   return parts.join(' ');
