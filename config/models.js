@@ -44,6 +44,8 @@ const VLLM_MODELS = {
     speculativeConfig: '{"method":"mtp","num_speculative_tokens":3}',
     thinkingSupported: true,
     mtpSupported: true,
+    prefixCaching: true,  // Hybrid-attention APC (vLLM 0.27): agent/judge workload is ~92% prefill;
+                          // watch prompt_tokens_cached_total + KV evictions after enabling
     envVars: {
       PYTORCH_CUDA_ALLOC_CONF: 'expandable_segments:True',
       VLLM_USE_FLASHINFER_SAMPLER: '0',  // FlashInfer sampling kernels fail to JIT on CUDA13/Ampere
@@ -92,6 +94,7 @@ const CUDA_DEVICES_BY_TP = { 1: '0', 2: '0,1', 4: '0,1,2,3' };
 const OVERRIDE_KEYS = [
   'tensorParallelSize', 'gpuMemoryUtilization', 'maxModelLen', 'kvCacheDtype',
   'speculativeEnabled', 'speculativeTokens', 'reasoningParser', 'thinkingMode',
+  'prefixCaching',
 ];
 
 /**
@@ -202,6 +205,14 @@ function validateOverrides(modelConfig, overrides) {
     }
   }
 
+  if (o.prefixCaching !== undefined) {
+    if (typeof o.prefixCaching === 'boolean') {
+      merged.prefixCaching = o.prefixCaching;
+    } else {
+      errors.push('prefixCaching must be true or false');
+    }
+  }
+
   return { merged, errors };
 }
 
@@ -236,6 +247,7 @@ function getAllModels() {
     thinkingSupported: !!model.thinkingSupported,
     mtpSupported: !!model.mtpSupported,
     minTensorParallelSize: model.minTensorParallelSize || 1,
+    prefixCaching: !!model.prefixCaching,
     reasoningParser: model.reasoningParser || null,
     speculativeTokens: model.speculativeConfig
       ? JSON.parse(model.speculativeConfig).num_speculative_tokens
