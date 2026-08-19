@@ -110,10 +110,14 @@ async function pollVllmMetrics() {
     const analytics = readJson(ANALYTICS_FILE, getDefaultAnalytics());
 
     // Update current metrics
+    // Cache gauges are 0-1 fractions in vLLM (kv_cache_usage_perc is the
+    // current name; gpu_cache_usage_perc is the legacy one) — convert to %.
+    const fracToPerc = (v) => (v === null || v === undefined || Number.isNaN(v)
+      ? null : parseFloat((v * 100).toFixed(1)));
     analytics.current = {
       tokensPerSecond: calculateTokensPerSecond(metrics),
-      gpuCacheUtilization: metrics['vllm:gpu_cache_usage_perc'] ?? null,
-      cpuCacheUtilization: metrics['vllm:cpu_cache_usage_perc'] ?? null,
+      gpuCacheUtilization: fracToPerc(metrics['vllm:kv_cache_usage_perc'] ?? metrics['vllm:gpu_cache_usage_perc'] ?? null),
+      cpuCacheUtilization: fracToPerc(metrics['vllm:cpu_cache_usage_perc'] ?? null),
       requestsRunning: metrics['vllm:num_requests_running'] || 0,
       requestsWaiting: metrics['vllm:num_requests_waiting'] || 0,
       avgTimeToFirstToken: null,

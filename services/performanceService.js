@@ -134,7 +134,10 @@ async function measureResponseTime(url, endpoint = '/health') {
 
 // Previous sample for windowed (per-interval) rates; survives across polls
 // within this process, resets on container restart.
-let lastVllmSample = null; // { ts, genTokens, ttftSum, ttftCount, windowedTps, windowedTtft }
+let lastVllmSample = null; // { ts, genTokens, promptTokens, cachedTokens, ttftSum, ttftCount,
+                            //   prefillSum, prefillCount, decodeSum, decodeCount,
+                            //   windowedTps, windowedTtft, windowedPrefillMs, windowedDecodeMs,
+                            //   windowedCacheHitPerc, phase }
 
 /**
  * Get vLLM performance metrics
@@ -153,6 +156,10 @@ async function getVllmMetrics() {
     timeToFirstToken: null,     // Average TTFT in seconds
     avgTokensPerRequest: null,
     kvCacheUsedPerc: null,      // Overall KV cache usage
+    avgPrefillTimeMs: null,     // Avg prefill time per request (windowed, keep-last)
+    avgDecodeTimeMs: null,      // Avg decode time per request (windowed, keep-last)
+    cacheHitPerc: null,         // Prompt tokens served from cache (windowed, keep-last)
+    phase: null,                // { state: 'prefilling'|'generating'|'idle', elapsedSec }
     // Memory info
     gpuMemory: null,            // GPU memory from nvidia-smi
   };
@@ -167,10 +174,13 @@ async function getVllmMetrics() {
 
       const metrics = parsePrometheusMetrics(metricsResponse.data);
 
-      // KV Cache usage (GPU vs CPU/disk) — current name is kv_cache_usage_perc
-      const kvPerc = metrics['vllm:kv_cache_usage_perc'] ?? metrics['vllm:gpu_cache_usage_perc'] ?? null;
+      // KV Cache usage (GPU vs CPU/disk) — current name is kv_cache_usage_perc.
+      // vLLM exports these gauges as 0-1 fractions; convert to % for display.
+      const fracToPerc = (v) => (v === null || v === undefined || Number.isNaN(v)
+        ? null : parseFloat((v * 100).toFixed(1)));
+      const kvPerc = fracToPerc(metrics['vllm:kv_cache_usage_perc'] ?? metrics['vllm:gpu_cache_usage_perc'] ?? null);
       details.gpuCacheUsage = kvPerc;
-      details.cpuCacheUsage = metrics['vllm:cpu_cache_usage_perc'] ?? null;
+      details.cpuCacheUsage = fracToPerc(metrics['vllm:cpu_cache_usage_perc'] ?? null);
       details.kvCacheUsedPerc = kvPerc;
 
       // Request counts
@@ -197,16 +207,44 @@ async function getVllmMetrics() {
       details.timeToFirstToken = lifetimeTtft;
 
       // Windowed rates: deltas since the previous poll show the CURRENT
-      // throughput (idle -> ~0, generating -> real-time rate) and the TTFT
-      // of requests completed in this window only.
+      // throughput and the TTFT/prefill/decode of requests completed in this
+      // window only. When a window produces no data (idle), the last measured
+      // value is kept — a rate of 0 would just blank the panels between
+      // requests.
       const genTotal = metrics['vllm:generation_tokens_total'] || 0;
+      const promptTotal = metrics['vllm:prompt_tokens_total'] || 0;
+      const cachedTotal = metrics['vllm:prompt_tokens_cached_total'] || 0;
+      const prefillSum = metrics['vllm:request_prefill_time_seconds_sum'] || 0;
+      const prefillCount = metrics['vllm:request_prefill_time_seconds_count'] || 0;
+      const decodeSum = metrics['vllm:request_decode_time_seconds_sum'] || 0;
+      const decodeCount = metrics['vllm:request_decode_time_seconds_count'] || 0;
       const now = Date.now();
+
+      // vLLM restart / model switch: counters drop to 0 — drop stale windowed
+      // state so keep-last values from the previous run don't leak through.
+      if (lastVllmSample && (genTotal < lastVllmSample.genTokens || promptTotal < lastVllmSample.promptTokens)) {
+        lastVllmSample = null;
+      }
+
+      // Lifetime averages as bootstrap (first poll after process/restart)
+      details.avgPrefillTimeMs = prefillCount > 0 ? parseFloat(((prefillSum / prefillCount) * 1000).toFixed(0)) : null;
+      details.avgDecodeTimeMs = decodeCount > 0 ? parseFloat(((decodeSum / decodeCount) * 1000).toFixed(0)) : null;
+      details.cacheHitPerc = promptTotal > 0 ? parseFloat(((cachedTotal / promptTotal) * 100).toFixed(1)) : null;
+
+      let phase = { state: 'idle', sinceTs: now };
       if (lastVllmSample) {
         const dt = (now - lastVllmSample.ts) / 1000;
         const dTok = genTotal - lastVllmSample.genTokens;
+        const dPrompt = promptTotal - lastVllmSample.promptTokens;
+        const dCached = cachedTotal - lastVllmSample.cachedTokens;
         const dCount = ttftCount - lastVllmSample.ttftCount;
         const dSum = ttftSum - lastVllmSample.ttftSum;
-        if (dt > 0.5 && dTok >= 0) {
+        const dPrefillSum = prefillSum - lastVllmSample.prefillSum;
+        const dPrefillCount = prefillCount - lastVllmSample.prefillCount;
+        const dDecodeSum = decodeSum - lastVllmSample.decodeSum;
+        const dDecodeCount = decodeCount - lastVllmSample.decodeCount;
+
+        if (dt > 0.5 && dTok > 0) {
           const w = parseFloat((dTok / dt).toFixed(1));
           details.tokensPerSecond = w;
           lastVllmSample.windowedTps = w;
@@ -220,11 +258,52 @@ async function getVllmMetrics() {
         } else if (lastVllmSample.windowedTtft !== undefined) {
           details.timeToFirstToken = lastVllmSample.windowedTtft;
         }
+        if (dPrefillCount > 0 && dPrefillSum >= 0) {
+          const w = parseFloat(((dPrefillSum / dPrefillCount) * 1000).toFixed(0));
+          details.avgPrefillTimeMs = w;
+          lastVllmSample.windowedPrefillMs = w;
+        } else if (lastVllmSample.windowedPrefillMs !== undefined) {
+          details.avgPrefillTimeMs = lastVllmSample.windowedPrefillMs;
+        }
+        if (dDecodeCount > 0 && dDecodeSum >= 0) {
+          const w = parseFloat(((dDecodeSum / dDecodeCount) * 1000).toFixed(0));
+          details.avgDecodeTimeMs = w;
+          lastVllmSample.windowedDecodeMs = w;
+        } else if (lastVllmSample.windowedDecodeMs !== undefined) {
+          details.avgDecodeTimeMs = lastVllmSample.windowedDecodeMs;
+        }
+        if (dPrompt > 0) {
+          const w = parseFloat(((dCached / dPrompt) * 100).toFixed(1));
+          details.cacheHitPerc = w;
+          lastVllmSample.windowedCacheHitPerc = w;
+        } else if (lastVllmSample.windowedCacheHitPerc !== undefined) {
+          details.cacheHitPerc = lastVllmSample.windowedCacheHitPerc;
+        }
+
+        // Phase from counter movement: tokens flowing = generating, prompt
+        // growing while a request runs = prefilling, otherwise idle. On a
+        // transition the clock restarts (detection granularity = poll interval).
+        const newState = dTok > 0 ? 'generating'
+          : (dPrompt > 0 && details.requestsRunning > 0) ? 'prefilling'
+          : 'idle';
+        phase = newState === lastVllmSample.phase?.state
+          ? lastVllmSample.phase
+          : { state: newState, sinceTs: now };
       }
+      details.phase = {
+        state: phase.state,
+        elapsedSec: Math.max(0, Math.round((now - phase.sinceTs) / 1000)),
+      };
+
       lastVllmSample = {
-        ts: now, genTokens: genTotal, ttftSum, ttftCount,
+        ts: now, genTokens: genTotal, promptTokens: promptTotal, cachedTokens: cachedTotal,
+        ttftSum, ttftCount, prefillSum, prefillCount, decodeSum, decodeCount,
         windowedTps: lastVllmSample?.windowedTps,
         windowedTtft: lastVllmSample?.windowedTtft,
+        windowedPrefillMs: lastVllmSample?.windowedPrefillMs,
+        windowedDecodeMs: lastVllmSample?.windowedDecodeMs,
+        windowedCacheHitPerc: lastVllmSample?.windowedCacheHitPerc,
+        phase,
       };
 
       // Average tokens per request
