@@ -132,6 +132,10 @@ async function measureResponseTime(url, endpoint = '/health') {
   }
 }
 
+// Previous sample for windowed (per-interval) rates; survives across polls
+// within this process, resets on container restart.
+let lastVllmSample = null; // { ts, genTokens, ttftSum, ttftCount, windowedTps, windowedTtft }
+
 /**
  * Get vLLM performance metrics
  */
@@ -181,13 +185,47 @@ async function getVllmMetrics() {
                                        metrics['vllm:num_generation_tokens_total'] ||
                                        metrics['vllm:num_generation_tokens'] || 0;
 
-      // Calculate tokens per second
-      details.tokensPerSecond = calculateTokensPerSecond(metrics);
+      // Calculate tokens per second (lifetime average, used as bootstrap)
+      const lifetimeTps = calculateTokensPerSecond(metrics);
+      details.lifetimeTokensPerSecond = lifetimeTps;
+      details.tokensPerSecond = lifetimeTps;
 
-      // Time to first token
+      // Time to first token (lifetime average, used as bootstrap)
       const ttftSum = metrics['vllm:time_to_first_token_seconds_sum'] || 0;
       const ttftCount = metrics['vllm:time_to_first_token_seconds_count'] || 0;
-      details.timeToFirstToken = ttftCount > 0 ? ttftSum / ttftCount : null;
+      const lifetimeTtft = ttftCount > 0 ? ttftSum / ttftCount : null;
+      details.timeToFirstToken = lifetimeTtft;
+
+      // Windowed rates: deltas since the previous poll show the CURRENT
+      // throughput (idle -> ~0, generating -> real-time rate) and the TTFT
+      // of requests completed in this window only.
+      const genTotal = metrics['vllm:generation_tokens_total'] || 0;
+      const now = Date.now();
+      if (lastVllmSample) {
+        const dt = (now - lastVllmSample.ts) / 1000;
+        const dTok = genTotal - lastVllmSample.genTokens;
+        const dCount = ttftCount - lastVllmSample.ttftCount;
+        const dSum = ttftSum - lastVllmSample.ttftSum;
+        if (dt > 0.5 && dTok >= 0) {
+          const w = parseFloat((dTok / dt).toFixed(1));
+          details.tokensPerSecond = w;
+          lastVllmSample.windowedTps = w;
+        } else if (lastVllmSample.windowedTps !== undefined) {
+          details.tokensPerSecond = lastVllmSample.windowedTps;
+        }
+        if (dCount > 0 && dSum >= 0) {
+          const w = parseFloat((dSum / dCount).toFixed(3));
+          details.timeToFirstToken = w;
+          lastVllmSample.windowedTtft = w;
+        } else if (lastVllmSample.windowedTtft !== undefined) {
+          details.timeToFirstToken = lastVllmSample.windowedTtft;
+        }
+      }
+      lastVllmSample = {
+        ts: now, genTokens: genTotal, ttftSum, ttftCount,
+        windowedTps: lastVllmSample?.windowedTps,
+        windowedTtft: lastVllmSample?.windowedTtft,
+      };
 
       // Average tokens per request
       const requestCount = metrics['vllm:request_success_total'] ||
