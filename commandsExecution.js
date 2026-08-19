@@ -2,9 +2,15 @@ const { NodeSSH } = require('node-ssh');
 const fs = require('fs');
 const axios = require('axios');
 const { getModelConfig, getDefaultModelKey, validateOverrides } = require('./config/models');
+const { readJson, writeJson } = require('./utils/jsonStore');
 
 const ssh = new NodeSSH();
 const privateKey = fs.readFileSync('/root/.ssh/id_rsa', 'utf8');
+
+// Last-launch record: which model/config was launched. data/ lives on a
+// mounted volume, so the record survives container redeploys — /vllm-models
+// reads it to report the running model instead of the catalog default.
+const LOADED_MODEL_FILE = 'loaded-model.json';
 
 /**
  * Build environment variables prefix for the command
@@ -140,7 +146,7 @@ async function startVLLMServer(modelKey = null, overrides = null) {
       console.log('vLLM server started successfully');
     }
 
-    return {
+    const resolvedConfig = {
       key: selectedModelKey,
       id: modelConfig.id,
       tensorParallelSize: modelConfig.tensorParallelSize,
@@ -151,7 +157,18 @@ async function startVLLMServer(modelKey = null, overrides = null) {
       speculativeConfig: modelConfig.speculativeConfig || null,
       reasoningParser: modelConfig.reasoningParser || null,
       generationConfigOverride: modelConfig.generationConfigOverride || null,
+      prefixCaching: !!modelConfig.prefixCaching,
     };
+
+    writeJson(LOADED_MODEL_FILE, {
+      modelKey: selectedModelKey,
+      overrides: overrides || null,
+      resolvedConfig,
+      startedAt: new Date().toISOString(),
+      running: true,
+    });
+
+    return resolvedConfig;
 
   } catch (err) {
     console.error('SSH connection or command failed:', err);
@@ -183,6 +200,16 @@ async function stopVLLMServer(port = 8001) {
       console.error('Error stopping vLLM:', result.stderr);
     } else {
       console.log('vLLM stopped successfully:', result.stdout);
+    }
+
+    // Keep the last-launch record but flag it as stopped
+    const loaded = readJson(LOADED_MODEL_FILE, null);
+    if (loaded) {
+      writeJson(LOADED_MODEL_FILE, {
+        ...loaded,
+        running: false,
+        stoppedAt: new Date().toISOString(),
+      });
     }
 
   } catch (err) {
