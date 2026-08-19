@@ -20,6 +20,7 @@ const VLLM_MODELS = {
     prefixCaching: false,  // Disabled - causes memory issues with large context
     thinkingSupported: false,  // Non-thinking model
     mtpSupported: false,       // No MTP head in checkpoint
+    minTensorParallelSize: 4,  // AWQ weights are ~45GB: 2x24GB cards cannot hold them
     envVars: {
       VLLM_ALLOW_LONG_MAX_MODEL_LEN: '1',
       PYTORCH_CUDA_ALLOC_CONF: 'expandable_segments:True',
@@ -117,8 +118,11 @@ function validateOverrides(modelConfig, overrides) {
   const o = overrides;
 
   if (o.tensorParallelSize !== undefined) {
+    const minTp = modelConfig.minTensorParallelSize || 1;
     if (!OVERRIDE_TP_VALUES.includes(o.tensorParallelSize)) {
       errors.push(`tensorParallelSize must be one of ${OVERRIDE_TP_VALUES.join('/')}`);
+    } else if (o.tensorParallelSize < minTp) {
+      errors.push(`tensorParallelSize ${o.tensorParallelSize} is too low for this model: its weights need at least ${minTp} GPUs`);
     } else {
       merged.tensorParallelSize = o.tensorParallelSize;
       merged.cudaDevices = CUDA_DEVICES_BY_TP[o.tensorParallelSize];
@@ -227,6 +231,7 @@ function getAllModels() {
     // Launch-options metadata for the dashboard panel
     thinkingSupported: !!model.thinkingSupported,
     mtpSupported: !!model.mtpSupported,
+    minTensorParallelSize: model.minTensorParallelSize || 1,
     reasoningParser: model.reasoningParser || null,
     speculativeTokens: model.speculativeConfig
       ? JSON.parse(model.speculativeConfig).num_speculative_tokens
