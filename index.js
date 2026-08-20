@@ -43,6 +43,9 @@ analyticsService.startPolling();
 const costService = require('./services/costService');
 costService.startMonthlyAccumulation();
 
+// Sample vLLM metrics into per-launch history files (10s, only while healthy)
+require('./services/metricsHistoryService').startMetricsHistory();
+
 // Serve static files from the React app in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static('../client/build'));

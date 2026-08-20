@@ -1,6 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const performanceService = require('../services/performanceService');
+const metricsHistoryService = require('../services/metricsHistoryService');
+
+/**
+ * @route   GET /api/performance/history
+ * @desc    Persisted per-launch vLLM metrics history (sessions + samples)
+ * @query   model   - model key (omit to list available models)
+ *          session - session id or 'latest' (omit to list sessions only)
+ * @access  Public
+ */
+router.get('/history', (req, res) => {
+  try {
+    const { model, session } = req.query;
+    res.json(metricsHistoryService.getHistory({ model, session }));
+  } catch (error) {
+    console.error('Error in /api/performance/history:', error);
+    res.status(500).json({ error: 'Server error', message: error.message });
+  }
+});
 
 /**
  * @route   GET /api/performance/all
