@@ -38,6 +38,11 @@ app.use('/api/benchmark', require('./routes/benchmarkRoutes'));
 // Start analytics polling
 analyticsService.startPolling();
 
+// Start monthly power accumulation (session -> monthly transfer; replaces the
+// host-side cron — remove ~/power_monthly_accumulate.sh from crontab after deploy)
+const costService = require('./services/costService');
+costService.startMonthlyAccumulation();
+
 // Serve static files from the React app in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static('../client/build'));
