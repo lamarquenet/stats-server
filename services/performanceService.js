@@ -159,6 +159,7 @@ async function getVllmMetrics() {
     avgPrefillTimeMs: null,     // Avg prefill time per request (windowed, keep-last)
     avgDecodeTimeMs: null,      // Avg decode time per request (windowed, keep-last)
     cacheHitPerc: null,         // Prompt tokens served from cache (windowed, keep-last)
+    numPreemptions: null,       // Cumulative requests preempted for KV memory (0 = healthy)
     phase: null,                // { state: 'prefilling'|'generating'|'idle', elapsedSec }
     // Memory info
     gpuMemory: null,            // GPU memory from nvidia-smi
@@ -186,6 +187,10 @@ async function getVllmMetrics() {
       // Request counts
       details.requestsRunning = metrics['vllm:num_requests_running'] || 0;
       details.requestsWaiting = metrics['vllm:num_requests_waiting'] || 0;
+
+      // Preemptions: requests paused because KV memory ran short (with prefix
+      // caching on, cached blocks hold memory). Cumulative since vLLM start.
+      details.numPreemptions = metrics['vllm:num_preemptions_total'] ?? 0;
 
       // Token statistics (current names first, legacy fallbacks)
       details.totalPromptTokens = metrics['vllm:prompt_tokens_total'] ||
