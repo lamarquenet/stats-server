@@ -3,14 +3,23 @@ const axios = require('axios');
 const { readJson, writeJson } = require('../utils/jsonStore');
 const { exec } = require('child_process');
 const util = require('util');
+const fs = require('fs');
+const path = require('path');
 const execPromise = util.promisify(exec);
 
 const VLLM_URL = 'http://172.17.0.1:8001';
 const OLLAMA_URL = 'http://172.17.0.1:11434';
 const BENCHMARKS_FILE = 'benchmarks.json';
 
-// Fixed benchmark configuration
-const BENCHMARK_PROMPT = "Write a short poem about artificial intelligence.";
+// Fixed benchmark configuration: a long real text (public domain) so the run
+// exercises prefill/KV-cache, not just a 10-word toy prompt.
+const BENCHMARK_TEXT_FILE = path.join(__dirname, '..', 'assets', 'benchmark-text.txt');
+const BENCHMARK_PROMPT = fs.readFileSync(BENCHMARK_TEXT_FILE, 'utf8').trim();
+const BENCHMARK_PROMPT_WORDS = BENCHMARK_PROMPT.split(/\s+/).length;
+// Compact descriptor for results/config — never the full ~30KB text
+const BENCHMARK_PROMPT_SUMMARY =
+  `Long-text benchmark: ${BENCHMARK_PROMPT_WORDS}-word public-domain narrative ` +
+  `(H.G. Wells, "The Time Machine"; assets/benchmark-text.txt)`;
 const BENCHMARK_MAX_TOKENS = 1000;
 
 /**
@@ -107,11 +116,12 @@ async function runVllmBenchmark(model) {
           benchmarkId,
           model,
           service: 'vllm',
-          prompt: BENCHMARK_PROMPT,
+          prompt: BENCHMARK_PROMPT_SUMMARY,
+          promptWords: BENCHMARK_PROMPT_WORDS,
           results: {
             timeToFirstTokenMs: ttft,
             tokensGenerated,
-            promptTokens: BENCHMARK_PROMPT.split(' ').length, // Approximate
+            promptTokens: BENCHMARK_PROMPT_WORDS, // Approximate (words)
             totalLatencyMs,
             tokensPerSecond: tokensPerSecond ? parseFloat(tokensPerSecond) : null,
             output: fullOutput.substring(0, 200)
@@ -181,7 +191,8 @@ async function runOllamaBenchmark(model) {
       benchmarkId,
       model,
       service: 'ollama',
-      prompt: BENCHMARK_PROMPT,
+      prompt: BENCHMARK_PROMPT_SUMMARY,
+      promptWords: BENCHMARK_PROMPT_WORDS,
       results: {
         timeToFirstTokenMs: ttft,
         tokensGenerated,
@@ -258,5 +269,7 @@ module.exports = {
   getAllBenchmarks,
   getBenchmarksByModel,
   BENCHMARK_PROMPT,
+  BENCHMARK_PROMPT_SUMMARY,
+  BENCHMARK_PROMPT_WORDS,
   BENCHMARK_MAX_TOKENS
 };

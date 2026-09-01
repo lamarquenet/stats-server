@@ -62,7 +62,10 @@ router.post('/run', async (req, res) => {
  */
 router.get('/config', (req, res) => {
   res.json({
-    prompt: benchmarkService.BENCHMARK_PROMPT,
+    // Resumen + preview — el texto completo (~30KB) no viaja al dashboard
+    prompt: benchmarkService.BENCHMARK_PROMPT_SUMMARY,
+    promptWords: benchmarkService.BENCHMARK_PROMPT_WORDS,
+    preview: benchmarkService.BENCHMARK_PROMPT.substring(0, 200) + '…',
     maxTokens: benchmarkService.BENCHMARK_MAX_TOKENS,
     temperature: 1.0,
   });
