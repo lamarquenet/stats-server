@@ -31,12 +31,12 @@ const VLLM_MODELS = {
   'qwen38-27b-awq': {
     id: 'cyankiwi/Qwen3.8-27B-AWQ-INT4',
     name: 'Qwen3.8-27B (AWQ INT4)',
-    description: 'Dense 27B hybrid attention, MTP speculative decoding, 262K ctx, TP=2 on GPUs 0-1 (2 GPUs left free)',
+    description: 'Dense 27B hybrid attention, MTP speculative decoding, TP=2 on GPUs 1,3 (the x16 pair — 2 GPUs left free)',
     gpuMemoryUtilization: 0.90,
     maxModelLen: 262144,
     port: 8001,
     tensorParallelSize: 2,
-    cudaDevices: '0,1',
+    cudaDevices: '1,3',
     kvCacheDtype: 'fp8',
     toolCallParser: 'qwen3_coder',
     enableAutoToolChoice: true,
@@ -54,13 +54,13 @@ const VLLM_MODELS = {
   'qwen38-27b-int8': {
     id: 'lued/Qwen3.8-27B-INT8-W8A16-MTP',
     name: 'Qwen3.8-27B (INT8 W8A16)',
-    description: 'Near-native fidelity INT8, MTP speculative decoding, TP=2 on GPUs 0-1 (2 GPUs left free). 131K ctx at 0.93 mem (262K requires TP=4 override)',
-    gpuMemoryUtilization: 0.93,
-    maxModelLen: 131072,
+    description: 'Near-native fidelity INT8, MTP speculative decoding, TP=2 on GPUs 1,3 (the x16 pair — +19% prefill vs 0,1). 170K ctx at 0.95 (measured frontier: 190K@0.97, 262K requires TP=4)',
+    gpuMemoryUtilization: 0.95,
+    maxModelLen: 170000,
     maxModelLenNative: 262144,  // native cap for overrides (262K only fits with TP=4)
     port: 8001,
     tensorParallelSize: 2,
-    cudaDevices: '0,1',
+    cudaDevices: '1,3',
     kvCacheDtype: 'fp8',
     toolCallParser: 'qwen3_coder',
     enableAutoToolChoice: true,
@@ -89,8 +89,31 @@ const SAMPLING = {
 const OVERRIDE_TP_VALUES = [1, 2, 4];
 const OVERRIDE_KV_DTYPES = ['auto', 'fp8'];
 const OVERRIDE_SPEC_TOKENS = [1, 2, 3, 4];
-const OVERRIDE_GPU_MEM_RANGE = { min: 0.50, max: 0.95 };
-const CUDA_DEVICES_BY_TP = { 1: '0', 2: '0,1', 4: '0,1,2,3' };
+const OVERRIDE_GPU_MEM_RANGE = { min: 0.50, max: 0.97 };  // 0.97: medido seguro con GPU3 limpia (preset max-context 190k)
+const CUDA_DEVICES_BY_TP = { 1: '0', 2: '1,3', 4: '0,1,2,3' };  // TP=2 → 1,3: GPUs x16 (bench 2026-10-11: +19% prefill vs 0,1; decode igual)
+
+/**
+ * AI-recommended launch presets (benches 2026-10-11, ~/bench-results/ del aiserver).
+ * Ambos: TP=2 en GPUs 1,3 (x16), MTP on, thinking off, prefix caching on.
+ * - recomendado: 170k @0.95 — ~1.1 GiB de margen por GPU, números estables.
+ * - max-context: 190k @0.97 — frontera medida (~600 MiB de aire; 200k no entra).
+ */
+const AI_PRESETS = {
+  'ai-recommended': {
+    key: 'ai-recommended',
+    name: '✨ Recomendado IA',
+    description: '170K ctx @0.95 · GPUs 1,3 (x16) · MTP · thinking off · prefix cache',
+    model: 'qwen38-27b-int8',
+    overrides: { maxModelLen: 170000, gpuMemoryUtilization: 0.95, thinkingMode: 'instruct', prefixCaching: true },
+  },
+  'ai-max-context': {
+    key: 'ai-max-context',
+    name: '✨ IA max contexto',
+    description: '190K ctx @0.97 · GPUs 1,3 (x16) · MTP · thinking off · prefix cache (frontera medida)',
+    model: 'qwen38-27b-int8',
+    overrides: { maxModelLen: 190000, gpuMemoryUtilization: 0.97, thinkingMode: 'instruct', prefixCaching: true },
+  },
+};
 const OVERRIDE_KEYS = [
   'tensorParallelSize', 'gpuMemoryUtilization', 'maxModelLen', 'kvCacheDtype',
   'speculativeEnabled', 'speculativeTokens', 'reasoningParser', 'thinkingMode',
@@ -266,6 +289,7 @@ function getDefaultModelKey() {
 module.exports = {
   VLLM_MODELS,
   SAMPLING,
+  AI_PRESETS,
   getModelConfig,
   getAllModels,
   getDefaultModelKey,

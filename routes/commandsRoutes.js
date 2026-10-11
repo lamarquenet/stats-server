@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const commandsExecution = require('../commandsExecution');
-const { getAllModels, getDefaultModelKey } = require('../config/models');
+const { getAllModels, getDefaultModelKey, AI_PRESETS } = require('../config/models');
 const { readJson } = require('../utils/jsonStore');
 
 const VLLM_URL = 'http://172.17.0.1:8001';
@@ -37,6 +37,7 @@ router.get('/vllm-models', async (req, res) => {
 
     res.json({
       models,
+      presets: Object.values(AI_PRESETS),
       defaultModel,
       currentModel,
       runningModelId,
